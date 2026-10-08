@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Disclosure and Privacy</title>
+  <style>
+    body { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; font: 17px/1.65 system-ui, sans-serif; color: #1d1f24; }
+    h1 { font-size: 30px; } h2 { margin-top: 32px; font-size: 20px; }
+    a { color: #1a5fd0; }
+  </style>
+</head>
+<body>
+  <p><a href="/">&larr; Back</a></p>
+  <h1>Affiliate disclosure and privacy</h1>
+
+  <h2>Affiliate disclosure</h2>
+  <p>As an Amazon Associate I earn from qualifying purchases. Links to Amazon on this site are affiliate links. If you buy through them, I may earn a small commission at no extra cost to you. It never changes the price you pay or which products I recommend.</p>
+
+  <h2>Advertising</h2>
+  <p>This site may show ads from third-party networks such as Google AdSense. These partners may use cookies to show ads based on your visits to this and other sites. You can manage personalized ads at <a href="https://adssettings.google.com" rel="noopener">adssettings.google.com</a>.</p>
+
+  <h2>Privacy</h2>
+  <p>This site does not ask for accounts or personal details and does not collect your name or email. Third parties such as Amazon and ad networks may set their own cookies when you click their links or view their ads. Their own privacy policies apply to that data.</p>
+
+  <h2>Contact</h2>
+  <p>Questions? Email <span id="mail">you@example.com</span>.</p>
+
+  <p><small>Template text. Edit it to match how you actually run the site, and check current Amazon Associates and Google AdSense program policies.</small></p>
+
+    <script>
+    fetch("/api/site").then(function (r) { return r.json(); }).then(function (s) {
+      if (s.contactEmail) document.getElementById("mail").textContent = s.contactEmail;
+    }).catch(function () {});
+  </script>
+</body>
+</html>

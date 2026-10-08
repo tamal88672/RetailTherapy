@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Retail Therapy | Deal Board</title>
+  <link rel="stylesheet" href="../shared/ads.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="head">
+    <div class="head-in">
+      <div>
+        <h1 data-site-name></h1>
+        <p class="sub"><span data-site-tag></span> · updated <span id="upd"></span></p>
+      </div>
+      <label class="sort">Sort
+        <select id="sort" aria-label="Sort">
+          <option value="featured">Featured</option>
+          <option value="az">A to Z</option>
+        </select>
+      </label>
+    </div>
+    <nav class="tabs" id="tabs" aria-label="Categories"></nav>
+  </header>
+  <p class="disc" data-disclosure></p>
+
+  <main class="wrap">
+    <section id="list" class="list" aria-live="polite"></section>
+    <aside class="rail">
+      <div class="rail-ad"><div class="ad-slot tall" data-ad="sidebar"></div></div>
+    </aside>
+  </main>
+
+  <div class="ad-inline"><div class="ad-slot" data-ad="inline"></div></div>
+
+  <footer class="foot">
+    <p data-disclosure></p>
+    <p><a href="../legal.html">Disclosure &amp; Privacy</a> · &copy; <span data-year></span> <span data-site-name></span></p>
+  </footer>
+
+  <script src="../shared/app.js"></script>
+  <script src="view.js"></script>
+</body>
+</html>

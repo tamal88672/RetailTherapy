@@ -1,0 +1,18 @@
+/* Ad rules shared by all designs:
+   - fixed reserved size so the page never jumps when an ad loads
+   - desktop: sticky side rail that never overlays content
+   - mobile: one inline slot after the products, never above the fold
+   - no popups, interstitials or sticky bottom bars */
+.ad-slot { display: block; width: 100%; max-width: 300px; min-height: 250px; margin: 0 auto; contain: layout; }
+.ad-slot.tall { min-height: 600px; }
+.ad-label { display: block; margin: 0 0 6px; font: 600 10px/1 system-ui, sans-serif; letter-spacing: .1em; text-transform: uppercase; opacity: .55; }
+.ad-ph { display: grid; place-items: center; min-height: 250px; border: 1px dashed currentColor; border-radius: 10px; opacity: .4; text-align: center; font: 600 14px system-ui, sans-serif; }
+.ad-slot.tall .ad-ph { min-height: 600px; }
+.ad-ph small { display: block; margin-top: 4px; font-weight: 400; opacity: .8; }
+
+.rail-ad { display: none; }
+.ad-inline { display: block; margin: 32px auto 0; max-width: 336px; padding: 0 16px; }
+@media (min-width: 1024px) {
+  .rail-ad { display: block; }
+  .ad-inline { display: none; }
+}

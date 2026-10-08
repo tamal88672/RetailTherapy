@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Pick a design</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #f4f4f6; color: #16181d; }
+    header { max-width: 1100px; margin: 0 auto; padding: 36px 20px 8px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    header p { margin: 0; color: #5b6270; }
+    .cards { max-width: 1100px; margin: 24px auto 48px; padding: 0 20px; display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+    .card { background: #fff; border-radius: 14px; overflow: hidden; text-decoration: none; color: inherit; box-shadow: 0 1px 3px rgba(0,0,0,.08); transition: transform .15s, box-shadow .15s; display: block; }
+    .card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    .shot { position: relative; aspect-ratio: 3 / 2; overflow: hidden; background: #ddd; }
+    .shot iframe { position: absolute; top: 0; left: 0; width: 1200px; height: 800px; border: 0; transform-origin: 0 0; pointer-events: none; }
+    .meta { padding: 14px 18px 18px; }
+    .meta h2 { margin: 0 0 4px; font-size: 18px; }
+    .meta p { margin: 0; color: #5b6270; font-size: 14px; }
+    code { background: #e9e9ee; padding: 1px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Pick a design</h1>
+    <p>Same products, same ad rail, three looks. Click one to open it. To make one the live site, set <code>Site__LiveDesign</code> to its folder name.</p>
+  </header>
+  <div class="cards">
+    <a class="card" href="../v1-magazine/index.html"><div class="shot"><iframe src="../v1-magazine/index.html" loading="lazy" title="Magazine preview"></iframe></div>
+      <div class="meta"><h2>1. Magazine</h2><p>Editorial and warm. One hero pick, then story-style rows.</p></div></a>
+    <a class="card" href="../v2-masonry/index.html"><div class="shot"><iframe src="../v2-masonry/index.html" loading="lazy" title="Masonry preview"></iframe></div>
+      <div class="meta"><h2>2. Masonry</h2><p>Pinterest-style cards with search and chips. Matches your pin traffic.</p></div></a>
+    <a class="card" href="../v3-compact/index.html"><div class="shot"><iframe src="../v3-compact/index.html" loading="lazy" title="Deal board preview"></iframe></div>
+      <div class="meta"><h2>3. Deal Board</h2><p>Dark, dense ranked list. Fastest to scan, best for comparison shoppers.</p></div></a>
+  </div>
+  <script>
+    function fit() {
+      document.querySelectorAll(".shot").forEach(function (s) {
+        s.querySelector("iframe").style.transform = "scale(" + (s.clientWidth / 1200) + ")";
+      });
+    }
+    window.addEventListener("resize", fit); fit();
+  </script>
+</body>
+</html>

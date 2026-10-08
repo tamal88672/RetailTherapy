@@ -1,0 +1,230 @@
+[
+  {
+    "id": "vitc-serum",
+    "title": "Vitamin C Brightening Serum",
+    "category": "Beauty",
+    "asin": "REPLACE_ASIN_01",
+    "url": null,
+    "emoji": "🍊",
+    "hue": 30,
+    "image": null,
+    "blurb": "A lightweight daily glow serum that layers easily under sunscreen and makeup.",
+    "pros": [
+      "Lightweight texture",
+      "Layers under makeup",
+      "Subtle scent"
+    ],
+    "badge": "Editor's pick",
+    "order": 1,
+    "active": true
+  },
+  {
+    "id": "lip-mask",
+    "title": "Overnight Lip Sleeping Mask",
+    "category": "Beauty",
+    "asin": "REPLACE_ASIN_02",
+    "url": null,
+    "emoji": "💋",
+    "hue": 345,
+    "image": null,
+    "blurb": "Wake up to softer lips. A small tub that lasts for months.",
+    "pros": [
+      "Not sticky",
+      "Travel size",
+      "Great gift"
+    ],
+    "badge": null,
+    "order": 2,
+    "active": true
+  },
+  {
+    "id": "gua-sha",
+    "title": "Rose Quartz Gua Sha Facial Tool",
+    "category": "Beauty",
+    "asin": "REPLACE_ASIN_03",
+    "url": null,
+    "emoji": "💎",
+    "hue": 330,
+    "image": null,
+    "blurb": "A relaxing five-minute evening ritual with a tool that feels as good as it looks.",
+    "pros": [
+      "Smooth edges",
+      "Easy to clean",
+      "Comes with pouch"
+    ],
+    "badge": null,
+    "order": 3,
+    "active": true
+  },
+  {
+    "id": "hair-towel",
+    "title": "Microfiber Hair Drying Wrap",
+    "category": "Beauty",
+    "asin": "REPLACE_ASIN_04",
+    "url": null,
+    "emoji": "🧖",
+    "hue": 190,
+    "image": null,
+    "blurb": "Cuts drying time and keeps frizz down. Stays put without clips.",
+    "pros": [
+      "Fast drying",
+      "Machine washable",
+      "Gentle on hair"
+    ],
+    "badge": null,
+    "order": 4,
+    "active": true
+  },
+  {
+    "id": "ceramic-pan",
+    "title": "Ceramic Nonstick Frying Pan",
+    "category": "Kitchen",
+    "asin": "REPLACE_ASIN_05",
+    "url": null,
+    "emoji": "🍳",
+    "hue": 18,
+    "image": null,
+    "blurb": "Eggs slide right out and cleanup takes seconds. Works on every stovetop.",
+    "pros": [
+      "PFAS-free coating",
+      "Even heating",
+      "Easy cleanup"
+    ],
+    "badge": "Best seller",
+    "order": 5,
+    "active": true
+  },
+  {
+    "id": "prep-containers",
+    "title": "Glass Meal Prep Containers (10-pack)",
+    "category": "Kitchen",
+    "asin": "REPLACE_ASIN_06",
+    "url": null,
+    "emoji": "🥗",
+    "hue": 125,
+    "image": null,
+    "blurb": "Oven, microwave and dishwasher safe, with lids that actually seal.",
+    "pros": [
+      "Leak-resistant lids",
+      "Stackable",
+      "No lingering smells"
+    ],
+    "badge": null,
+    "order": 6,
+    "active": true
+  },
+  {
+    "id": "milk-frother",
+    "title": "Handheld Electric Milk Frother",
+    "category": "Kitchen",
+    "asin": "REPLACE_ASIN_07",
+    "url": null,
+    "emoji": "☕",
+    "hue": 35,
+    "image": null,
+    "blurb": "Cafe-style lattes at home for the price of a single coffee-shop drink.",
+    "pros": [
+      "USB rechargeable",
+      "Quiet motor",
+      "Tiny storage footprint"
+    ],
+    "badge": null,
+    "order": 7,
+    "active": true
+  },
+  {
+    "id": "baking-mats",
+    "title": "Reusable Silicone Baking Mats",
+    "category": "Kitchen",
+    "asin": "REPLACE_ASIN_08",
+    "url": null,
+    "emoji": "🍪",
+    "hue": 48,
+    "image": null,
+    "blurb": "Skip the parchment paper. Cookies bake evenly and nothing sticks.",
+    "pros": [
+      "Set of 3",
+      "Dishwasher safe",
+      "Saves money"
+    ],
+    "badge": null,
+    "order": 8,
+    "active": true
+  },
+  {
+    "id": "kindle-unlimited",
+    "title": "Kindle Unlimited Free Trial",
+    "category": "Books & Audio",
+    "asin": "REPLACE_ASIN_09",
+    "url": null,
+    "emoji": "📚",
+    "hue": 212,
+    "image": null,
+    "blurb": "Read as much as you like on any device. Try it free, cancel anytime.",
+    "pros": [
+      "Millions of titles",
+      "Works on any device",
+      "Free trial"
+    ],
+    "badge": "Free trial",
+    "order": 9,
+    "active": true
+  },
+  {
+    "id": "audiobooks",
+    "title": "Audible Audiobook Trial",
+    "category": "Books & Audio",
+    "asin": "REPLACE_ASIN_10",
+    "url": null,
+    "emoji": "🎧",
+    "hue": 262,
+    "image": null,
+    "blurb": "Turn commutes and chores into reading time. Your first pick is yours to keep.",
+    "pros": [
+      "Keep your first pick",
+      "Listen offline",
+      "Cancel anytime"
+    ],
+    "badge": "Free trial",
+    "order": 10,
+    "active": true
+  },
+  {
+    "id": "diffuser",
+    "title": "Ultrasonic Aroma Diffuser",
+    "category": "Home",
+    "asin": "REPLACE_ASIN_11",
+    "url": null,
+    "emoji": "🕯️",
+    "hue": 285,
+    "image": null,
+    "blurb": "A soft glow and a calmer room. Quiet enough for the bedroom.",
+    "pros": [
+      "Auto shut-off",
+      "Whisper quiet",
+      "Large tank"
+    ],
+    "badge": null,
+    "order": 11,
+    "active": true
+  },
+  {
+    "id": "throw-blanket",
+    "title": "Chunky Knit Throw Blanket",
+    "category": "Home",
+    "asin": "REPLACE_ASIN_12",
+    "url": null,
+    "emoji": "🧣",
+    "hue": 8,
+    "image": null,
+    "blurb": "The cozy upgrade for any couch. Heavy, soft and photographs beautifully.",
+    "pros": [
+      "Machine washable",
+      "Several colors",
+      "Gift-ready"
+    ],
+    "badge": null,
+    "order": 12,
+    "active": true
+  }
+]
