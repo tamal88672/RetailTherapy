@@ -60,7 +60,7 @@ curl -X DELETE "$URL/api/admin/products/vitamin-c-serum" -H "X-Admin-Key: $KEY"
 ```
 **New tab:** every product has an `addedOn` date (yyyy-MM-dd). A product added through the admin API is dated today unless you pass `"addedOn"`. The New tab shows the latest day's batch. Products are categorized when they are added, so after that day they simply drop out of New and stay in their category. **Sorting:** the site lists products by `order` (lowest first), so ranking by popularity means setting `order`.
 
-Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL (Cloudinary works well; a dead link falls back to the emoji tile). `"url"` takes a SiteStripe link (amzn.to / a.co links are used as given, since they already carry your tag). A Make.com scenario can call the same PUT endpoint.
+Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL (Cloudinary works well; a dead link falls back to the emoji tile). `"url"` takes a SiteStripe link (amzn.to / a.co links are opened once when saved to check they carry your tag; if not, they are replaced by the full product link with your tag). A Make.com scenario can call the same PUT endpoint.
 
 ## Ads that don't get in the way
 - Desktop: sticky 300x600 side rail that never overlays content.
@@ -71,6 +71,6 @@ Set `"active": false` to hide a product without deleting it. `"image"` takes any
 ## Amazon rules to remember
 - Keep the disclosure visible (header and footer already have it).
 - Do not show prices unless pulled live from Amazon's API. This site avoids prices on purpose.
-- Links go straight to Amazon with your tag (no redirects or cloaking) and use `rel="sponsored nofollow noopener"`.
+- Every Amazon link is forced to carry your tag: plain amazon.com links always get it, short links are checked when added (also `GET /api/admin/audit-links`, add `?fix=true` to repair). Links go straight to Amazon with your tag (no redirects or cloaking) and use `rel="sponsored nofollow noopener"`.
 - Associates needs qualifying sales within 180 days of signup to stay active.
 - `legal.html` is template text. Edit it to match how you run the site.

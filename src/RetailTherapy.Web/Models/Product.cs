@@ -40,26 +40,22 @@ public sealed record ProductDto(
 
 public static class AffiliateLinks
 {
-    /// <summary>Direct Amazon link with your Associates tag (no redirects or cloaking).</summary>
+    /// <summary>
+    /// Direct Amazon link with your Associates tag (no redirects or cloaking).
+    /// Plain amazon.com links always get YOUR tag (any other tag is replaced).
+    /// Short links (amzn.to, a.co...) were checked when the product was added, so they are used as given.
+    /// </summary>
     public static string Build(Product p, string amazonTag)
     {
         if (!string.IsNullOrWhiteSpace(p.Url))
         {
-            // SiteStripe short links (amzn.to, a.co, link.amazon...) and links that already carry a tag are used as given.
-            // Only a plain amazon.com product page gets your tag added.
             var given = p.Url!.Trim();
-            var plainAmazonPage = Uri.TryCreate(given, UriKind.Absolute, out var u) &&
-                (u.Host.Equals("amazon.com", StringComparison.OrdinalIgnoreCase) ||
-                 u.Host.EndsWith(".amazon.com", StringComparison.OrdinalIgnoreCase)) &&
-                !u.Host.Equals("link.amazon.com", StringComparison.OrdinalIgnoreCase);
-            if (given.Contains("tag=", StringComparison.OrdinalIgnoreCase) || !plainAmazonPage)
-                return given;
+            if (Uri.TryCreate(given, UriKind.Absolute, out var u) && RetailTherapy.Web.Data.LinkGuard.IsPlainAmazon(u))
+                return RetailTherapy.Web.Data.LinkGuard.SetTag(u, amazonTag);
+            return given;
         }
 
-        var baseUrl = !string.IsNullOrWhiteSpace(p.Url)
-            ? p.Url!
-            : $"https://www.amazon.com/dp/{Uri.EscapeDataString(p.Asin ?? "")}";
-        var sep = baseUrl.Contains('?') ? '&' : '?';
-        return $"{baseUrl}{sep}tag={Uri.EscapeDataString(amazonTag)}";
+        var baseUrl = $"https://www.amazon.com/dp/{Uri.EscapeDataString(p.Asin ?? "")}";
+        return $"{baseUrl}?tag={Uri.EscapeDataString(amazonTag)}";
     }
 }
