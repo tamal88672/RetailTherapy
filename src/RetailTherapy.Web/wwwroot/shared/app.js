@@ -98,8 +98,13 @@
           '" data-ad-slot="' + RT.esc(id) + '" data-ad-format="auto" data-full-width-responsive="true"></ins>';
         try { (window.adsbygoogle = window.adsbygoogle || []).push({}); } catch (e) {}
       } else if (A.enabled !== false) {
-        el.innerHTML = label + '<div class="ad-ph"><span>Ad space<small>' +
-          (el.className.indexOf("tall") > -1 ? "300 × 600" : "300 × 250") + "</small></span></div>";
+        // Until real ads run, this box invites sponsors. The email link shows only once a real contact address is set.
+        var mail = S.contactEmail || "";
+        var link = mail && mail.indexOf("example.com") === -1
+          ? '<a href="mailto:' + RT.esc(mail) + '?subject=' + encodeURIComponent("Advertising on " + (S.name || "the site")) + '">Advertise with us</a>'
+          : "";
+        el.innerHTML = label + '<div class="ad-ph pitch"><span><b>Advertise here</b>' +
+          "Reach shoppers hunting for beauty, kitchen and book finds." + link + "</span></div>";
       }
     });
   };

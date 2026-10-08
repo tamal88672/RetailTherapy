@@ -126,6 +126,30 @@ admin.MapPut("/products/{id}", async (string id, Product p, ProductCatalog catal
     return Results.Ok(p);
 });
 
+// Used by the Make.com automation: send the raw sheet row as form fields (title, url, image, feature1-3,
+// optional category). The site builds the id, category, picture tile and popularity order itself.
+admin.MapPost("/quick-add", async (HttpContext ctx, ProductCatalog catalog, CancellationToken ct) =>
+{
+    if (!ctx.Request.HasFormContentType)
+        return Results.BadRequest(new { error = "send form fields (application/x-www-form-urlencoded)" });
+    var form = await ctx.Request.ReadFormAsync(ct);
+    var p = QuickAdd.Build(form, out var error);
+    if (p is null) return Results.BadRequest(new { error });
+
+    // Posting the same row again updates it but keeps its category, order and date.
+    var existing = (await catalog.ListAllAsync(ct)).FirstOrDefault(x => x.Id == p.Id);
+    if (existing is not null)
+    {
+        p.Category = existing.Category;
+        p.Emoji = existing.Emoji;
+        p.Hue = existing.Hue;
+        p.Order = existing.Order;
+    }
+    p.AddedOn = string.IsNullOrWhiteSpace(existing?.AddedOn) ? DateTime.UtcNow.ToString("yyyy-MM-dd") : existing!.AddedOn;
+    await catalog.UpsertAsync(p, ct);
+    return Results.Ok(new { p.Id, p.Category, p.Order, p.AddedOn, created = existing is null });
+});
+
 admin.MapDelete("/products/{id}", async (string id, ProductCatalog catalog, CancellationToken ct) =>
     await catalog.DeleteAsync(id, ct) ? Results.NoContent() : Results.NotFound());
 

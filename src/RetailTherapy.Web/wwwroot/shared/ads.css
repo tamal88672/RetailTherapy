@@ -9,6 +9,9 @@
 .ad-ph { display: grid; place-items: center; min-height: 250px; border: 1px dashed currentColor; border-radius: 10px; opacity: .4; text-align: center; font: 600 14px system-ui, sans-serif; }
 .ad-slot.tall .ad-ph { min-height: 600px; }
 .ad-ph small { display: block; margin-top: 4px; font-weight: 400; opacity: .8; }
+.ad-ph.pitch { opacity: .85; padding: 20px; }
+.ad-ph.pitch b { display: block; margin-bottom: 8px; font-size: 18px; }
+.ad-ph.pitch a { display: inline-block; margin-top: 14px; padding: 8px 16px; border: 1px solid currentColor; border-radius: 999px; font-weight: 700; text-decoration: none; color: inherit; }
 
 .rail-ad { display: none; }
 .ad-inline { display: block; margin: 32px auto 0; max-width: 336px; padding: 0 16px; }
