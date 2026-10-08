@@ -92,7 +92,7 @@ app.MapGet("/robots.txt", () => Results.Text(
     "text/plain"));
 
 // ---- Admin API (manage products without redeploying). Needs header X-Admin-Key. ----
-var adminKey = app.Configuration["Admin:ApiKey"] ?? "";
+var adminKey = (app.Configuration["Admin:ApiKey"] ?? "").Trim();
 var idPattern = new Regex("^[a-z0-9][a-z0-9-]{0,63}$", RegexOptions.Compiled);
 
 var admin = app.MapGroup("/api/admin");

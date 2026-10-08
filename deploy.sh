@@ -21,7 +21,7 @@ fi
 
 # Admin key for the product API, created once
 if ! gcloud secrets describe retail-admin-key >/dev/null 2>&1; then
-  openssl rand -hex 24 | gcloud secrets create retail-admin-key --data-file=-
+  openssl rand -hex 24 | tr -d '\n' | gcloud secrets create retail-admin-key --data-file=-
   echo "Admin key created. Show it with: gcloud secrets versions access latest --secret=retail-admin-key"
 fi
 
