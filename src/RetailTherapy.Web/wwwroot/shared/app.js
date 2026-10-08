@@ -27,16 +27,25 @@
   // The server builds the direct Amazon link (with your tag) and sends it as p.url.
   RT.url = function (p) { return p.url; };
 
+  // The "New" tab shows the most recent day's batch. Every product also keeps its normal category.
+  RT.latestBatch = function () {
+    var d = "";
+    P.forEach(function (p) { if (p.addedOn && p.addedOn > d) d = p.addedOn; });
+    return d;
+  };
+
   RT.categories = function () {
     var seen = {}, out = [];
+    if (RT.latestBatch()) { seen["New"] = 1; out.push("New"); }
     P.forEach(function (p) { if (!seen[p.category]) { seen[p.category] = 1; out.push(p.category); } });
     return out;
   };
 
   RT.filter = function (cat, q) {
     q = (q || "").trim().toLowerCase();
+    var latest = cat === "New" ? RT.latestBatch() : "";
     return P.filter(function (p) {
-      var okCat = !cat || cat === "All" || p.category === cat;
+      var okCat = !cat || cat === "All" || (cat === "New" ? (latest && p.addedOn === latest) : p.category === cat);
       var okQ = !q || (p.title + " " + p.blurb + " " + p.category).toLowerCase().indexOf(q) > -1;
       return okCat && okQ;
     });

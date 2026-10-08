@@ -116,6 +116,12 @@ admin.MapPut("/products/{id}", async (string id, Product p, ProductCatalog catal
     if (string.IsNullOrWhiteSpace(p.Asin) && string.IsNullOrWhiteSpace(p.Url))
         return Results.BadRequest(new { error = "provide asin or url" });
     p.Id = id;
+    // New products are dated today (UTC). Existing products keep their date unless the request sets one.
+    if (string.IsNullOrWhiteSpace(p.AddedOn))
+    {
+        var existing = (await catalog.ListAllAsync(ct)).FirstOrDefault(x => x.Id == id);
+        p.AddedOn = existing is not null ? existing.AddedOn : DateTime.UtcNow.ToString("yyyy-MM-dd");
+    }
     await catalog.UpsertAsync(p, ct);
     return Results.Ok(p);
 });
