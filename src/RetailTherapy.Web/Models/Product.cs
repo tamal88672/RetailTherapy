@@ -41,6 +41,17 @@ public static class AffiliateLinks
     /// <summary>Direct Amazon link with your Associates tag (no redirects or cloaking).</summary>
     public static string Build(Product p, string amazonTag)
     {
+        if (!string.IsNullOrWhiteSpace(p.Url))
+        {
+            // Short links from SiteStripe (amzn.to, a.co) and links that already carry a tag are used as given.
+            var given = p.Url!.Trim();
+            if (given.Contains("tag=", StringComparison.OrdinalIgnoreCase) ||
+                Uri.TryCreate(given, UriKind.Absolute, out var u) &&
+                (u.Host.Equals("amzn.to", StringComparison.OrdinalIgnoreCase) ||
+                 u.Host.Equals("a.co", StringComparison.OrdinalIgnoreCase)))
+                return given;
+        }
+
         var baseUrl = !string.IsNullOrWhiteSpace(p.Url)
             ? p.Url!
             : $"https://www.amazon.com/dp/{Uri.EscapeDataString(p.Asin ?? "")}";

@@ -58,7 +58,7 @@ curl -X PUT "$URL/api/admin/products/vitamin-c-serum" -H "X-Admin-Key: $KEY" -H 
 curl "$URL/api/admin/products" -H "X-Admin-Key: $KEY"            # list all
 curl -X DELETE "$URL/api/admin/products/vitamin-c-serum" -H "X-Admin-Key: $KEY"
 ```
-Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL. A Make.com scenario can call the same PUT endpoint.
+Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL (Cloudinary works well; a dead link falls back to the emoji tile). `"url"` takes a SiteStripe link (amzn.to / a.co links are used as given, since they already carry your tag). A Make.com scenario can call the same PUT endpoint.
 
 ## Ads that don't get in the way
 - Desktop: sticky 300x600 side rail that never overlays content.

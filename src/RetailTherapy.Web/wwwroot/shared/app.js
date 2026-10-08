@@ -45,10 +45,21 @@
   // Product picture: real image if provided, otherwise a colored emoji tile.
   RT.art = function (p, cls, extraStyle) {
     var inner = p.image
-      ? '<img src="' + RT.esc(p.image) + '" alt="' + RT.esc(p.title) + '" loading="lazy">'
+      ? '<img src="' + RT.esc(p.image) + '" alt="' + RT.esc(p.title) + '" data-emoji="' + RT.esc(p.emoji) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span aria-hidden="true">' + p.emoji + "</span>";
     return '<div class="art ' + (cls || "") + '" style="--h:' + p.hue + ";" + (extraStyle || "") + '">' + inner + "</div>";
   };
+
+  // If a picture fails to load (dead link), fall back to the emoji tile.
+  document.addEventListener("error", function (e) {
+    var t = e.target;
+    if (t && t.tagName === "IMG" && t.parentNode && t.parentNode.classList.contains("art")) {
+      var s = document.createElement("span");
+      s.setAttribute("aria-hidden", "true");
+      s.textContent = t.getAttribute("data-emoji") || "🛍️";
+      t.parentNode.replaceChild(s, t);
+    }
+  }, true);
 
   RT.cta = function (p, label, cls) {
     return '<a class="cta ' + (cls || "") + '" href="' + RT.esc(RT.url(p)) + '" target="_blank" rel="' + RT.rel + '">' +
