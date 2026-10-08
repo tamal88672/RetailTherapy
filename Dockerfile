@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/RetailTherapy.Web/RetailTherapy.Web.csproj src/RetailTherapy.Web/
-RUN dotnet restore src/RetailTherapy.Web/RetailTherapy.Web.csproj -r linux-x64
+RUN dotnet restore src/RetailTherapy.Web/RetailTherapy.Web.csproj -r linux-x64 -p:PublishReadyToRun=true
 COPY src/ src/
 # ReadyToRun = precompiled code, which shortens Cloud Run cold starts
 RUN dotnet publish src/RetailTherapy.Web/RetailTherapy.Web.csproj \

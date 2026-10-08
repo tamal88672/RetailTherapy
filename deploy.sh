@@ -15,8 +15,9 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregi
   firestore.googleapis.com secretmanager.googleapis.com
 
 # Firestore (native mode), created once
-gcloud firestore databases describe >/dev/null 2>&1 || \
-  gcloud firestore databases create --location="$REGION" --type=firestore-native
+if [ -z "$(gcloud firestore databases list --format='value(name)' --quiet 2>/dev/null)" ]; then
+  gcloud firestore databases create --location="$REGION" --type=firestore-native --quiet
+fi
 
 # Admin key for the product API, created once
 if ! gcloud secrets describe retail-admin-key >/dev/null 2>&1; then
@@ -30,6 +31,9 @@ gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" 
   --role=roles/datastore.user --condition=None >/dev/null
 gcloud secrets add-iam-policy-binding retail-admin-key --member="serviceAccount:$SA" \
   --role=roles/secretmanager.secretAccessor >/dev/null
+# Newer projects build source deploys as the default compute account, which then needs build permissions
+gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" \
+  --role=roles/cloudbuild.builds.builder --condition=None >/dev/null
 
 gcloud run deploy "$SERVICE" --source . --region "$REGION" --allow-unauthenticated \
   --min-instances 0 --max-instances 2 --cpu 1 --memory 512Mi \
