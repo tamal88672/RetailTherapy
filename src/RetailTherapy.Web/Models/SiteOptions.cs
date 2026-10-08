@@ -3,7 +3,7 @@ namespace RetailTherapy.Web.Models;
 /// <summary>Bound from the "Site" config section. Override with env vars, e.g. Site__AmazonTag.</summary>
 public sealed class SiteOptions
 {
-    public string Name { get; set; } = "Retail Therapy";
+    public string Name { get; set; } = "RetailTherapy.com";
     public string Tagline { get; set; } = "";
     public string AmazonTag { get; set; } = "";
     public string ContactEmail { get; set; } = "";
