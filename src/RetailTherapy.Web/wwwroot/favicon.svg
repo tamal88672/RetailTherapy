@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Retail Therapy">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7d8f"/>
+      <stop offset="1" stop-color="#e8455a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- bag handle -->
+  <path d="M190 214v-36c0-48 28-80 66-80s66 32 66 80v36" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- bag -->
+  <path d="M126 196h260c9 0 17 7 18 16l24 196c2 14-9 26-23 26H107c-14 0-25-12-23-26l24-196c1-9 9-16 18-16z" fill="#fff"/>
+  <!-- heart -->
+  <path d="M256 388c-70-50-104-84-104-124 0-27 21-47 46-47 24 0 46 14 58 38 12-24 34-38 58-38 25 0 46 20 46 47 0 40-34 74-104 124z" fill="#e8455a"/>
+  <!-- sparkle -->
+  <path d="M404 78l9 22 22 9-22 9-9 22-9-22-22-9 22-9z" fill="#fff"/>
+</svg>

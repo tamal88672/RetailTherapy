@@ -9,11 +9,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../shared/ads.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="/favicon.ico" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#e8455a">
 </head>
 <body>
   <header class="bar">
     <div class="bar-in">
-      <a class="logo" href="#"><span class="dot"></span><span data-site-name></span></a>
+      <a class="logo" href="#"><img class="logo-mark" src="/favicon.svg" alt="" width="30" height="30"><span data-site-name></span></a>
       <input id="q" type="search" placeholder="Search finds…" aria-label="Search">
     </div>
     <div class="chips" id="chips" role="tablist" aria-label="Categories"></div>
@@ -21,6 +26,22 @@
   </header>
 
   <main class="wrap">
+    <aside class="about-col">
+      <details class="about" open>
+        <summary>Why bookmark Retail Therapy?</summary>
+        <h2>Your shortcut before you shop</h2>
+        <p>Retail Therapy is a hand-picked shelf of popular Amazon finds in beauty, kitchen, books, fashion and home. Skip the endless scrolling and start with what people are actually buying.</p>
+        <h3>Why bookmark it</h3>
+        <ul>
+          <li><b>Popular first.</b> Finds are ordered by how many people are buying and reviewing them.</li>
+          <li><b>Fresh every day.</b> New picks land in the <b>New</b> tab daily.</li>
+          <li><b>Straight to Amazon.</b> One click to the real product page, and you pay the same price.</li>
+          <li><b>Free and simple.</b> No sign-up, no email, no pop-ups.</li>
+        </ul>
+        <p class="tip">Make it a habit: check Retail Therapy first, then buy on Amazon as usual.</p>
+        <p class="keys">Bookmark it now: press <b>Ctrl + D</b> (<b>⌘ + D</b> on Mac).</p>
+      </details>
+    </aside>
     <section id="grid" class="grid" aria-live="polite"></section>
     <aside class="rail">
       <div class="rail-ad"><div class="ad-slot tall" data-ad="sidebar"></div></div>
@@ -36,5 +57,15 @@
 
   <script src="../shared/app.js"></script>
   <script src="view.js"></script>
+  <script>
+    // The "why bookmark" box is always open on wide screens and starts collapsed on small ones.
+    (function () {
+      var box = document.querySelector(".about");
+      var wide = window.matchMedia("(min-width: 1280px)");
+      function sync() { if (wide.matches) box.setAttribute("open", ""); }
+      if (!wide.matches) box.removeAttribute("open");
+      if (wide.addEventListener) wide.addEventListener("change", sync);
+    })();
+  </script>
 </body>
 </html>

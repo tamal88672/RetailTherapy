@@ -6,6 +6,7 @@ a { color: inherit; }
 .bar { position: sticky; top: 0; z-index: 5; background: rgba(255,250,248,.94); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
 .bar-in { max-width: 1160px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 14px; align-items: center; }
 .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 20px; text-decoration: none; white-space: nowrap; }
+.logo-mark { display: block; width: 30px; height: 30px; }
 .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
 #q { flex: 1; min-width: 0; border: 0; background: #f6ebe7; border-radius: 999px; padding: 11px 18px; font: inherit; }
 #q:focus { outline: 2px solid var(--accent); }
@@ -17,6 +18,25 @@ a { color: inherit; }
 
 .wrap { max-width: 1160px; margin: 20px auto 0; padding: 0 16px; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1024px) { .wrap { grid-template-columns: minmax(0, 1fr) 300px; } .rail { position: sticky; top: 130px; align-self: start; } }
+
+/* "Why bookmark" box: left column on wide screens, collapsed box above the products on small ones */
+.about-col { grid-column: 1 / -1; }
+.about { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 18px; font-size: 14px; line-height: 1.5; }
+.about summary { cursor: pointer; font-weight: 800; }
+.about[open] summary { margin-bottom: 10px; }
+.about h2 { margin: 0 0 8px; font-size: 19px; line-height: 1.25; }
+.about h3 { margin: 16px 0 6px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.about p { margin: 0 0 10px; }
+.about ul { margin: 0 0 12px; padding-left: 18px; }
+.about li { margin-bottom: 6px; }
+.about .tip { margin: 0 0 10px; padding: 10px 12px; border-radius: 12px; background: #fdeef0; font-weight: 700; }
+.about .keys { margin: 0; font-size: 13px; color: var(--muted); }
+@media (min-width: 1280px) {
+  .wrap { max-width: 1520px; grid-template-columns: 270px minmax(0, 1fr) 300px; }
+  .about-col { grid-column: auto; position: sticky; top: 130px; align-self: start; }
+  .about { padding: 18px; }
+  .about summary { display: none; }
+}
 
 /* masonry via CSS columns */
 .grid { column-width: 150px; column-gap: 12px; }
