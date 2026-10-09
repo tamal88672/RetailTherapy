@@ -163,6 +163,32 @@ admin.MapPost("/quick-add", async (HttpContext ctx, ProductCatalog catalog, IHtt
     return Results.Ok(new { p.Id, p.Category, p.Order, p.AddedOn, created = existing is null, url = AffiliateLinks.Build(p, site.AmazonTag), linkCheck = link.State.ToString() });
 });
 
+// Used by the "link intake" automation: turns a SiteStripe / short link (or a bare product id) into the
+// product's ASIN and clean product URL, so the product details can be looked up.
+admin.MapPost("/resolve", async (HttpContext ctx, IHttpClientFactory http, CancellationToken ct) =>
+{
+    var link = ctx.Request.HasFormContentType
+        ? (await ctx.Request.ReadFormAsync(ct))["link"].ToString().Trim()
+        : ctx.Request.Query["link"].ToString().Trim();
+    if (link.Length == 0) return Results.BadRequest(new { error = "link is required" });
+
+    string? asin;
+    if (Regex.IsMatch(link, "^[A-Za-z0-9]{10}$"))
+    {
+        asin = link.ToUpperInvariant();
+    }
+    else
+    {
+        var final = await LinkGuard.ResolveFinalAsync(link, http.CreateClient("amazon"), ct);
+        if (final is null) return Results.UnprocessableEntity(new { error = "could not open this link" });
+        asin = LinkGuard.GetAsin(final);
+    }
+    if (asin is null) return Results.UnprocessableEntity(new { error = "no product id (ASIN) found in this link" });
+
+    var productUrl = $"https://www.amazon.com/dp/{asin}";
+    return Results.Ok(new { asin, productUrl, affiliateUrl = LinkGuard.SetTag(new Uri(productUrl), site.AmazonTag) });
+});
+
 // Checks every product link for your store ID. Add ?fix=true to rewrite wrong ones with your tag.
 admin.MapGet("/audit-links", async (bool? fix, ProductCatalog catalog, IHttpClientFactory http, CancellationToken ct) =>
 {

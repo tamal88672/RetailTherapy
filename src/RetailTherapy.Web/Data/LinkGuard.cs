@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace RetailTherapy.Web.Data;
 
 public enum LinkState
@@ -52,6 +54,28 @@ public static class LinkGuard
         pairs.Add("tag=" + Uri.EscapeDataString(tag));
         var b = new UriBuilder(u) { Query = string.Join("&", pairs) };
         return b.Uri.ToString();
+    }
+
+    private static readonly Regex AsinInPath = new(
+        @"/(?:dp|gp/product|gp/aw/d|exec/obidos/ASIN)/([A-Za-z0-9]{10})(?:[/?#]|$)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>The 10-character product id (ASIN) in an Amazon product link, if there is one.</summary>
+    public static string? GetAsin(Uri u)
+    {
+        var m = AsinInPath.Match(u.AbsolutePath);
+        return m.Success ? m.Groups[1].Value.ToUpperInvariant() : null;
+    }
+
+    /// <summary>
+    /// Opens a short link (amzn.to, link.amazon...) and returns the Amazon product page it points to.
+    /// Plain Amazon links are returned as given; anything else returns null.
+    /// </summary>
+    public static async Task<Uri?> ResolveFinalAsync(string url, HttpClient http, CancellationToken ct)
+    {
+        if (!Uri.TryCreate((url ?? "").Trim(), UriKind.Absolute, out var u)) return null;
+        if (IsPlainAmazon(u)) return u;
+        return IsShort(u) ? await ResolveAsync(u, http, ct) : null;
     }
 
     public static async Task<LinkResult> EnsureAsync(string url, string tag, HttpClient http, CancellationToken ct)
