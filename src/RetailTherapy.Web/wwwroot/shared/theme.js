@@ -1,5 +1,5 @@
 // Day / night / system theme.
-// The page's <head> sets data-theme before the first paint (no white flash). This file adds the
+// A small script at the top of the page sets data-theme before the first paint (no white flash). This file adds the
 // three-way switch, remembers the choice, and follows the device setting while "system" is selected.
 (function () {
   var KEY = "rt-theme";
