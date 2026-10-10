@@ -25,6 +25,7 @@ Changes made outside the code (Make.com automations, product data) are listed at
 - Phone top bar: the Day / Auto / Night switch folds into one button (tap to cycle) to make room for the account button.
 
 ### Changed
+- `deploy.sh` now uses `--update-env-vars`, so settings added later (the `Auth__*` sign-in values, `Site__ListsName`...) are kept when you deploy again.
 - "No sign-up, no email" wording replaced: signing in is optional.
 - Provisions for 1.9 (several lists, sharing, public profiles) and 1.10 (recommendations) are in place: the account list is a normal `wishlists` document with `ownerType: user`.
 

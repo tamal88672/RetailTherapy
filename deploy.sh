@@ -35,9 +35,10 @@ gcloud secrets add-iam-policy-binding retail-admin-key --member="serviceAccount:
 gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" \
   --role=roles/cloudbuild.builds.builder --condition=None >/dev/null
 
+# --update-env-vars (not --set-) so settings added later, like the Auth__* sign-in values, survive each deploy
 gcloud run deploy "$SERVICE" --source . --region "$REGION" --allow-unauthenticated \
   --min-instances 0 --max-instances 2 --cpu 1 --memory 512Mi \
-  --set-env-vars "Storage__Provider=Firestore,Storage__ProjectId=$PROJECT,Site__AmazonTag=$AMAZON_TAG,Site__LiveDesign=$DESIGN,Site__Ads__Client=$ADSENSE_CLIENT" \
+  --update-env-vars "Storage__Provider=Firestore,Storage__ProjectId=$PROJECT,Site__AmazonTag=$AMAZON_TAG,Site__LiveDesign=$DESIGN,Site__Ads__Client=$ADSENSE_CLIENT" \
   --set-secrets "Admin__ApiKey=retail-admin-key:latest"
 
 echo "Live at: $(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')"
