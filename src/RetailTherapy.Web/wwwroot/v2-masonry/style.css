@@ -83,11 +83,14 @@ a.chip { text-decoration: none; display: inline-block; }
 .saved .n[hidden] { display: none; }
 .saved:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 420px) {
+  .bar-in { gap: 10px; }
   .logo { font-size: 16px; gap: 5px; }
   .logo-mark { width: 24px; height: 24px; }
+  /* the three-way switch folds into one button that shows the current mode; each tap moves to the next */
   .theme { padding: 2px; }
-  .theme button { width: 28px; height: 28px; }
-  .theme button svg { width: 16px; height: 16px; }
+  .theme button { width: 32px; height: 30px; }
+  .theme button[aria-pressed="false"] { display: none; }
+  .theme button svg { width: 17px; height: 17px; }
   .saved { width: 38px; height: 34px; }
 }
 
@@ -267,3 +270,71 @@ html { scroll-behavior: smooth; }
   .heart, .heart svg { transition: none; }
   .heart.pop svg { animation: none; }
 }
+
+/* ---------- Accounts: top-bar button, menu and sign-in dialogs ---------- */
+.acct { flex: none; position: relative; }
+.acct[hidden] { display: none; }
+.acct-btn { height: 38px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--field); color: var(--ink); cursor: pointer;
+  font: 800 14px/1 Nunito, ui-rounded, system-ui, sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 6px; position: relative; }
+.acct-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.acct-btn:hover { color: var(--accent); }
+.acct-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.acct-av { width: 38px; padding: 0; background: var(--cta-bg); color: #fff; text-transform: uppercase; font-size: 16px; box-shadow: var(--cta-glow); }
+.acct-av:hover { color: #fff; filter: brightness(1.08); }
+.acct-av .dot { position: absolute; top: -2px; right: -2px; width: 11px; height: 11px; border-radius: 50%; background: #ffd23f; box-shadow: 0 0 0 2px var(--bg); }
+.acct-menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 220px; padding: 8px; display: grid; gap: 2px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 14px 38px rgba(0,0,0,.28); }
+.acct-menu button, .acct-who { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: transparent; color: var(--ink);
+  font: 700 14px/1.2 Nunito, ui-rounded, system-ui, sans-serif; text-align: left; }
+.acct-menu button { cursor: pointer; }
+.acct-menu button:hover, .acct-menu button:focus-visible { background: var(--field); outline: none; }
+.acct-menu .danger { color: #d33b3b; }
+:root[data-theme="dark"] .acct-menu .danger { color: #ff8a9a; }
+.acct-who { font-weight: 800; font-size: 15px; word-break: break-all; border-bottom: 1px solid var(--line); border-radius: 10px 10px 0 0; margin-bottom: 4px; }
+.acct-who.muted { color: var(--muted); font-weight: 600; }
+@media (max-width: 420px) {
+  .acct-btn:not(.acct-av) { width: 38px; padding: 0; }
+  .acct-btn:not(.acct-av) span { display: none; }
+  .acct-menu { min-width: 200px; }
+}
+
+.acct-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; margin: auto; padding: 26px 24px 22px; border: 1px solid var(--line);
+  border-radius: 22px; background: var(--bg); color: var(--ink); box-shadow: 0 24px 70px rgba(0,0,0,.4); font: 16px/1.5 Nunito, ui-rounded, system-ui, sans-serif; }
+.acct-dialog::backdrop { background: rgba(20,8,30,.55); backdrop-filter: blur(3px); }
+.acct-dialog h2 { margin: 0 28px 6px 0; font-size: 22px; line-height: 1.2; }
+.acct-sub { margin: 0 0 16px; color: var(--muted); font-size: 15px; }
+.acct-sub b { color: var(--ink); }
+.acct-x { position: absolute; top: 10px; right: 12px; width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 26px; line-height: 1; cursor: pointer; }
+.acct-x:hover { background: var(--field); color: var(--ink); }
+.acct-dialog label { display: block; margin: 0 0 6px; font-weight: 800; font-size: 14px; }
+.acct-dialog input { width: 100%; height: 46px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); font: inherit; }
+.acct-dialog input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.acct-dialog form { display: grid; gap: 10px; }
+.acct-google, .acct-primary, .acct-danger { width: 100%; height: 48px; border: 0; border-radius: 999px; font: 800 16px/1 Nunito, ui-rounded, system-ui, sans-serif; cursor: pointer; }
+.acct-google { background: var(--card); color: var(--ink); border: 1.5px solid var(--line); }
+.acct-google:hover { border-color: var(--accent); color: var(--accent); }
+.acct-primary { background: var(--cta-bg); color: #fff; box-shadow: var(--cta-glow); }
+.acct-primary:hover:not(:disabled) { box-shadow: var(--cta-glow-hover); filter: brightness(1.05); }
+.acct-danger { background: #d33b3b; color: #fff; margin-bottom: 6px; }
+.acct-dialog button:disabled { opacity: .5; cursor: default; }
+.acct-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.acct-link { display: block; margin: 8px auto 0; padding: 6px 10px; border: 0; background: none; color: var(--muted); font: 700 14px/1.2 Nunito, system-ui, sans-serif; text-decoration: underline; cursor: pointer; }
+.acct-link:hover { color: var(--accent); }
+.acct-fine .acct-link { display: inline; margin: 0; padding: 0; font-size: inherit; }
+.acct-or { display: flex; align-items: center; gap: 12px; margin: 16px 0 14px; color: var(--muted); font-size: 13px; font-weight: 700; }
+.acct-or::before, .acct-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.acct-at { display: flex; align-items: center; border: 1.5px solid var(--line); border-radius: 12px; background: var(--card); padding-left: 14px; }
+.acct-at:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.acct-at span { color: var(--muted); font-weight: 800; }
+.acct-at input { border: 0; background: transparent; padding-left: 4px; }
+.acct-at input:focus { outline: none; }
+.acct-hint { margin: 0; min-height: 20px; color: var(--muted); font-size: 13px; }
+.acct-hint.good { color: #1f8a4c; font-weight: 700; }
+.acct-hint.bad { color: #d33b3b; font-weight: 700; }
+:root[data-theme="dark"] .acct-hint.good { color: #6ee7a0; }
+:root[data-theme="dark"] .acct-hint.bad { color: #ff8a9a; }
+.acct-err { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(211,59,59,.12); color: #c42f2f; font-size: 14px; font-weight: 700; }
+:root[data-theme="dark"] .acct-err { color: #ff9aa8; }
+.acct-err[hidden] { display: none; }
+.acct-fine { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.acct-fine a { color: inherit; }

@@ -47,6 +47,9 @@ First request after idle is a cold start (about a second). Set `--min-instances 
 | `Site__Ads__SlotSidebar` / `SlotInline` | AdSense ad unit IDs |
 | `Site__ContactEmail`, `Site__Name`, `Site__Tagline` | text on the site |
 | `Site__ListsName`, `Site__ListsTagline` | what the curated-lists page is called ("Therapy Sessions") and its subtitle |
+| `Auth__ProjectId`, `Auth__ApiKey`, `Auth__AppId` | Firebase web settings. **Sign-in stays off until `ProjectId` and `ApiKey` are set.** Public values, not secrets. See "Sign-in" below |
+| `Auth__AuthDomain` | defaults to `{ProjectId}.firebaseapp.com` |
+| `Auth__BlockedNames` | extra words usernames may not contain, comma separated |
 | `Admin__ApiKey` | key for the admin API (a Secret Manager secret in deploy.sh) |
 
 ## Manage products (no redeploy)
@@ -84,12 +87,38 @@ curl -X DELETE "$URL/api/admin/lists/mothers-day" -H "X-Admin-Key: $KEY"
 ```
 Set `"active": false` to hide a list. Public: `GET /api/lists` (ids only; the page joins them with `/api/products`).
 
-**Saved items (heart).** Each product has a heart. The list is kept in the visitor's browser and shown by the heart button in the top bar. Every save, removal and click-through to Amazon is sent to `POST /api/track` with a random anonymous visitor id (no name or email); the list itself is also copied to the server (`PUT /api/wishlist`). Collections: `wishlists` (one document per visitor, with `ownerType`, `ownerId`, `visibility` and `shareCode` ready for accounts and sharing lists between users) and `events`.
+**Saved items (heart).** Each product has a heart. The list is kept in the visitor's browser (and in their account when signed in) and shown by the heart button in the top bar. Every save, removal and click-through to Amazon is sent to `POST /api/track` with a random anonymous visitor id (no name or email); the list itself is also copied to the server (`PUT /api/wishlist`). Collections: `wishlists` (one document per visitor, with `ownerType`, `ownerId`, `visibility` and `shareCode` ready for accounts and sharing lists between users) and `events`.
 
 **Report.** `GET /api/admin/stats?days=30` returns saves, removals, click-throughs, visitors, the most saved products (now and in the period), the most clicked, and a per-day count. Each event read is one database read, so it reads at most `limit` events (default 5000).
 ```
 curl "$URL/api/admin/stats?days=7" -H "X-Admin-Key: $KEY"
 ```
+
+## Sign-in (accounts)
+Optional. **Google** and **email link** only (no password, no phone/SMS, no Apple: those cost money or need a paid developer account). Firebase does not charge per user for these two methods (only phone/SMS sign-in is billed; see https://firebase.google.com/pricing).
+
+**Important: the email-link limit.** Firebase caps email-link sign-in emails at **5 per day on the Spark (no-billing) plan and 25,000 per day on the Blaze (pay-as-you-go) plan** (https://firebase.google.com/docs/auth/limits). Your Google Cloud project already has billing linked for Cloud Run, so Firebase should show it as Blaze: check **Firebase console, bottom left, plan name** and upgrade there if it says Spark. Blaze still has free monthly allowances, so this site stays at about $0. Set a budget alert in Google Cloud (Billing, Budgets) for peace of mind. Google sign-in sends no email, so it is not affected by the limit.
+
+**What it does.** A "Sign in" button appears in the top bar. After signing in, the person picks a **username once** (3 to 20 characters, letters, numbers and `_`; never changeable; unique; reserved and offensive words refused). The saved list (heart) now belongs to the account and follows them to every device. Anything saved before signing in joins the account's list. Signing out leaves that browser clean; "Delete account" removes the lists and the sign-in (the username stays reserved).
+
+**What the site stores.** Firebase keeps the email. This site keeps only: a random account id, the username, and the saved list. Collections: `users` (one per person), `usernames` (one document per claimed name; the document id is the name, so two people can never get the same one: the claim is a single database transaction), `wishlists` (account lists have id `u-{accountId}`; the anonymous list a person had before is kept for the report and marked `claimedBy`).
+
+**How it is checked.** The browser sends Firebase's sign-in token as `Authorization: Bearer ...`. The server checks the signature against Google's published keys (cached, no extra package), the project, the issuer and the expiry (`Data/FirebaseTokenVerifier.cs`). Endpoints: `GET /api/me`, `GET /api/me/username/available?name=`, `POST /api/me/username`, `GET|PUT /api/me/wishlist`, `POST /api/me/claim`, `DELETE /api/me`. Each person is limited to 120 calls per 10 minutes.
+
+**One-time setup (about 10 minutes, no cost):**
+1. Open https://console.firebase.google.com, **Add project**, and choose your existing Google Cloud project (`project-dff667a3-f08e-426c-ac7`). Say no to Google Analytics. (Adding Firebase to the project does not change Cloud Run or Firestore.)
+2. **Build, Authentication, Get started.** Under **Sign-in method** turn on **Google** (pick a support email), and **Email/Password** then switch on **Email link (passwordless sign-in)**.
+3. **Authentication, Settings, Authorized domains, Add domain**: add your Cloud Run address without `https://` (for example `retail-therapy-725210062806.us-central1.run.app`) and, later, your own domain.
+4. **Project settings (gear), General, Your apps, Add app, Web (`</>`)**. Register it with any nickname. It shows `apiKey`, `authDomain`, `projectId` and `appId`.
+5. Set them on Cloud Run:
+```
+gcloud run services update retail-therapy --region us-central1 \
+  --update-env-vars "Auth__ProjectId=<projectId>,Auth__ApiKey=<apiKey>,Auth__AppId=<appId>,Auth__AuthDomain=<authDomain>"
+```
+6. **Firestore rules.** The app reads and writes Firestore only from the server. In Firebase console, Firestore, Rules, make sure nothing is open to browsers: `rules_version = '2'; service cloud.firestore { match /databases/{db}/documents { match /{document=**} { allow read, write: if false; } } }`. (The server uses its own service account, which ignores these rules.)
+7. Reload the site: the "Sign in" button appears. Test with your own Google account.
+
+**Good to know.** The Google pop-up needs pop-ups allowed; if it is blocked the person sees a message and can use the email link instead. Emails come from `noreply@{projectId}.firebaseapp.com` (change the wording under Authentication, Templates). Email-link sending is limited per day by plan (see above). Use your own domain before launch so the sign-in screens and emails look like your brand.
 
 ## Ads that don't get in the way
 - Desktop: sticky 300x600 side rail that never overlays content.

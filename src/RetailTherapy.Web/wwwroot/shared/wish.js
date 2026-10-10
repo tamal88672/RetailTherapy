@@ -2,11 +2,12 @@
 //
 // - The saved list lives in the visitor's browser (localStorage), newest first, so it works with no sign-in.
 // - Every save / remove / click-through to Amazon is sent to /api/track with a random visitor id (no name, no email).
-// - The list is also copied to the server (/api/wishlist). That copy is what accounts and shared lists will build on:
-//   later the same list can be claimed by a signed-in user and shared.
+// - The list is also copied to the server. Anonymous: /api/wishlist (by the random visitor id). Signed in (account.js):
+//   /api/me/wishlist, the account's own list, which follows the person to every device. The browser copy stays the working
+//   copy either way, so the page never waits for the network.
 (function () {
   var RT = window.RT;
-  var WKEY = "rt-wish", VKEY = "rt-vid", MAX = 200;
+  var WKEY = "rt-wish", VKEY = "rt-vid", OWNER = "rt-acct", MAX = 200;
   var ids = [];
   var listeners = [];
   var memVid = "";
@@ -63,17 +64,51 @@
   document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") flush(); });
 
   // ---- server copy of the list (debounced) ----
+  var acct = null;           // set by account.js while someone is signed in: { uid, token: function -> Promise<string|null> }
+  var lastToken = "";        // so a closing tab can still send its last change
+  var touches = 0;           // counts changes made on this page, to spot edits made while a request was in flight
   var syncTimer = null;
+
+  function authed(method, url, body) {
+    return acct.token().then(function (t) {
+      if (!t) throw new Error("signed out");
+      lastToken = t;
+      return fetch(url, {
+        method: method, keepalive: !!body,
+        headers: body ? { Authorization: "Bearer " + t, "Content-Type": "application/json" } : { Authorization: "Bearer " + t },
+        body: body ? JSON.stringify(body) : undefined
+      });
+    });
+  }
+  function pushNow() {
+    syncTimer = null;
+    try {
+      if (acct) return authed("PUT", "/api/me/wishlist", { productIds: ids }).catch(function () {});
+      return fetch("/api/wishlist", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, keepalive: true,
+        body: JSON.stringify({ visitorId: visitorId(), productIds: ids })
+      }).catch(function () {});
+    } catch (e) { return Promise.resolve(); }
+  }
   function syncSoon() {
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(function () {
-      try {
-        fetch("/api/wishlist", {
-          method: "PUT", headers: { "Content-Type": "application/json" }, keepalive: true,
-          body: JSON.stringify({ visitorId: visitorId(), productIds: ids })
-        }).catch(function () {});
-      } catch (e) {}
-    }, 1500);
+    syncTimer = setTimeout(pushNow, 1500);
+  }
+  // A closing tab sends what it has right away (the cached token is used because a new one cannot be fetched in time).
+  window.addEventListener("pagehide", function () {
+    if (!syncTimer) return;
+    clearTimeout(syncTimer); syncTimer = null;
+    try {
+      if (acct && lastToken) {
+        fetch("/api/me/wishlist", { method: "PUT", keepalive: true, headers: { Authorization: "Bearer " + lastToken, "Content-Type": "application/json" }, body: JSON.stringify({ productIds: ids }) }).catch(function () {});
+      } else if (!acct) pushNow();
+    } catch (e) {}
+  });
+
+  function union(a, b) {
+    var seen = {}, out = [];
+    a.concat(b).forEach(function (x) { if (!seen[x]) { seen[x] = 1; out.push(x); } });
+    return out.slice(0, MAX);
   }
 
   // ---- the saved list ----
@@ -88,9 +123,45 @@
       if (added) { ids.unshift(id); if (ids.length > MAX) ids.length = MAX; } else ids.splice(i, 1);
       writeIds();
       RT.track(added ? "wish_add" : "wish_remove", id, source);
+      touches++;
       syncSoon();
       changed(id);
       return added;
+    },
+
+    // ---- used by account.js ----
+    // Someone signed in. The first time this browser meets this account, the items saved here join the account's list;
+    // after that the account's list is the truth and this browser follows it.
+    attach: function (uid, tokenFn) {
+      acct = { uid: uid, token: tokenFn };
+      var owned = false;
+      try { owned = localStorage.getItem(OWNER) === uid; } catch (e) {}
+      var before = touches, merge = !owned || touches > 0;
+      var req = merge
+        ? authed("POST", "/api/me/claim", { visitorId: visitorId(), productIds: ids })
+        : authed("GET", "/api/me/wishlist");
+      return req.then(function (r) { if (!r.ok) throw new Error("status " + r.status); return r.json(); })
+        .then(function (j) {
+          try { localStorage.setItem(OWNER, uid); } catch (e) {}
+          var theirs = Array.isArray(j.productIds) ? j.productIds : [];
+          // If something was saved while we were asking, keep it too (never lose a save).
+          var next = touches !== before ? union(ids, theirs) : theirs.slice(0, MAX);
+          var same = next.join("|") === ids.join("|");
+          ids = next; writeIds();
+          if (!same) changed();
+          if (touches !== before) syncSoon();
+        })
+        .catch(function () { /* offline or not ready: keep the browser copy, try again next visit */ });
+    },
+    // Signed out: send any last change, then leave this browser clean (the list lives in the account now).
+    detach: function () {
+      var done = Promise.resolve();
+      if (acct && syncTimer) { clearTimeout(syncTimer); done = pushNow(); }
+      return done.then(function () {
+        acct = null; ids = []; writeIds(); lastToken = "";
+        try { localStorage.removeItem(OWNER); } catch (e) {}
+        changed();
+      });
     }
   };
 

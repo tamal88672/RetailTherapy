@@ -14,6 +14,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
+## [1.8.0] - 2026-10-10 (code pushed, waiting to be deployed with 1.5.0, 1.6.0 and 1.7.0)
+
+### Added
+- **Sign-in with Google or an email link.** No password, no phone/SMS, no Apple (those cost money or need a paid developer account). Firebase allows only 5 email-link emails a day on its free no-billing plan, so the project must be on the Blaze plan (the README explains; it still costs about $0). A "Sign in" button sits in the top bar (home and Sessions pages). It stays hidden until `Auth__ProjectId` and `Auth__ApiKey` are set, so the site works exactly as before until you finish the Firebase setup in the README.
+- **One-time username.** After the first sign-in the person picks a unique username (3 to 20 characters). It can never be changed. The check happens as they type, and the claim is a single database transaction, so two people can never get the same name. Reserved words (admin, support...) and offensive names are refused. "Not now" is allowed; the account menu offers it again.
+- **Saved list follows the account.** Items saved before signing in join the account's list; after that the list is the same on every device. Signing out leaves the browser clean. The old anonymous list is kept for the report and marked `claimedBy`.
+- Account menu: username, sign out, **delete account** (removes lists and sign-in; the username stays reserved). Privacy text updated.
+- API: `GET /api/me`, `GET /api/me/username/available`, `POST /api/me/username`, `GET|PUT /api/me/wishlist`, `POST /api/me/claim`, `DELETE /api/me`. Sign-in tokens are checked on the server (signature, project, issuer, expiry) with no new package. `GET /api/site` gains an `auth` block. New collections: `users`, `usernames`.
+- Phone top bar: the Day / Auto / Night switch folds into one button (tap to cycle) to make room for the account button.
+
+### Changed
+- "No sign-up, no email" wording replaced: signing in is optional.
+- Provisions for 1.9 (several lists, sharing, public profiles) and 1.10 (recommendations) are in place: the account list is a normal `wishlists` document with `ownerType: user`.
+
 ## [1.7.0] - 2026-10-10 (code pushed, waiting to be deployed with 1.5.0 and 1.6.0)
 
 ### Added

@@ -53,6 +53,9 @@ public static class FirestoreRegistration
         services.AddSingleton<IDocStore<CuratedList>>(sp => new FirestoreDocStore<CuratedList>(sp.GetRequiredService<FirestoreDb>(), config["Storage:ListsCollection"] ?? "lists"));
         services.AddSingleton<IDocStore<Wishlist>>(sp => new FirestoreDocStore<Wishlist>(sp.GetRequiredService<FirestoreDb>(), config["Storage:WishlistsCollection"] ?? "wishlists"));
         services.AddSingleton<IEventStore>(sp => new FirestoreEventStore(sp.GetRequiredService<FirestoreDb>(), config["Storage:EventsCollection"] ?? "events"));
+        // Accounts: one document per person, and one per claimed username (the document id is the name itself).
+        services.AddSingleton<IUserStore>(sp => new FirestoreUserStore(sp.GetRequiredService<FirestoreDb>(),
+            config["Storage:UsersCollection"] ?? "users", config["Storage:UsernamesCollection"] ?? "usernames"));
         return services;
     }
 }

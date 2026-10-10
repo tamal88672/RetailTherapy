@@ -5,6 +5,7 @@
   var KEY = "rt-theme";
   var root = document.documentElement;
   var mq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  var compact = window.matchMedia ? window.matchMedia("(max-width: 420px)") : null;
 
   function saved() {
     try { var v = localStorage.getItem(KEY); return v === "light" || v === "dark" ? v : "system"; }
@@ -24,7 +25,12 @@
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", t === "dark" ? "#0e0518" : "#e8455a");
     Array.prototype.forEach.call(document.querySelectorAll("[data-theme-toggle] button"), function (b) {
-      b.setAttribute("aria-pressed", b.getAttribute("data-mode") === mode ? "true" : "false");
+      var on = b.getAttribute("data-mode") === mode;
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      var name = b.getAttribute("data-label");
+      var phone = compact && compact.matches;
+      b.title = on && phone ? name + " (tap to change)" : name;
+      b.setAttribute("aria-label", on && phone ? "Color theme: " + name + ". Tap to change." : name);
     });
   }
 
@@ -46,16 +52,25 @@
   function mount() {
     Array.prototype.forEach.call(document.querySelectorAll("[data-theme-toggle]"), function (box) {
       box.innerHTML = BUTTONS.map(function (b) {
-        return '<button type="button" data-mode="' + b.mode + '" aria-label="' + b.label + '" title="' + b.label + '">' + b.icon + "</button>";
+        return '<button type="button" data-mode="' + b.mode + '" data-label="' + b.label + '" aria-label="' + b.label + '" title="' + b.label + '">' + b.icon + "</button>";
       }).join("");
       box.addEventListener("click", function (e) {
         var btn = e.target.closest("button[data-mode]");
-        if (btn) set(btn.getAttribute("data-mode"));
+        if (!btn) return;
+        // On a phone only the current mode's button is shown (the CSS hides the rest); tapping it moves to the next one.
+        if (compact && compact.matches) {
+          var order = ["light", "system", "dark"];
+          set(order[(order.indexOf(mode) + 1) % order.length]);
+        } else set(btn.getAttribute("data-mode"));
       });
     });
     apply(false);
   }
 
+  if (compact) {
+    if (compact.addEventListener) compact.addEventListener("change", function () { apply(false); });
+    else if (compact.addListener) compact.addListener(function () { apply(false); });
+  }
   if (mq) {
     var onChange = function () { if (mode === "system") apply(false); };
     if (mq.addEventListener) mq.addEventListener("change", onChange); else if (mq.addListener) mq.addListener(onChange);

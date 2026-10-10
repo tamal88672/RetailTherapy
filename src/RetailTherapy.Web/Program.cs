@@ -11,11 +11,13 @@ using RetailTherapy.Web.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site"));
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection("Auth"));
 builder.Services.AddMemoryCache();
 builder.Services.AddResponseCompression();
 builder.Services.AddSingleton<ProductCatalog>();
 builder.Services.AddSingleton<ListCatalog>();
 builder.Services.AddSingleton<TrackingGuard>();
+builder.Services.AddSingleton<FirebaseTokenVerifier>();
 // Used to open Amazon short links once (without following them into Amazon) to read the store ID they carry.
 builder.Services.AddHttpClient("amazon").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
@@ -31,6 +33,7 @@ else
     builder.Services.AddSingleton<IDocStore<CuratedList>>(_ => new JsonDocStore<CuratedList>(Path.Combine(data, "lists.json")));
     builder.Services.AddSingleton<IDocStore<Wishlist>>(_ => new JsonDocStore<Wishlist>(Path.Combine(data, "wishlists.json")));
     builder.Services.AddSingleton<IEventStore>(_ => new JsonLinesEventStore(Path.Combine(data, "events.jsonl")));
+    builder.Services.AddSingleton<IUserStore>(_ => new JsonUserStore(Path.Combine(data, "users.json")));
 }
 
 var app = builder.Build();
@@ -86,9 +89,10 @@ app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = CacheFiles });
 // ---- Public API ----
 app.MapGet("/healthz", () => Results.Text("ok"));
 
-app.MapGet("/api/site", (HttpContext ctx, IOptions<SiteOptions> o) =>
+app.MapGet("/api/site", (HttpContext ctx, IOptions<SiteOptions> o, IOptions<AuthOptions> a) =>
 {
     var s = o.Value;
+    var au = a.Value;
     ctx.Response.Headers.CacheControl = "public,max-age=300";
     return Results.Ok(new
     {
@@ -98,6 +102,10 @@ app.MapGet("/api/site", (HttpContext ctx, IOptions<SiteOptions> o) =>
         s.ContactEmail,
         s.ListsName,
         s.ListsTagline,
+        // Sign-in settings for the browser. Public by design. "Enabled" is false until Auth__ProjectId and Auth__ApiKey are set.
+        Auth = au.Enabled
+            ? new { Enabled = true, ApiKey = au.ApiKey, AuthDomain = au.Domain, ProjectId = au.ProjectId, AppId = au.AppId }
+            : new { Enabled = false, ApiKey = "", AuthDomain = "", ProjectId = "", AppId = "" },
         Ads = new { s.Ads.Enabled, s.Ads.Client, Slots = new { Sidebar = s.Ads.SlotSidebar, Inline = s.Ads.SlotInline } }
     });
 });
@@ -183,6 +191,142 @@ app.MapGet("/api/wishlist/{visitorId}", async (string visitorId, IDocStore<Wishl
     if (!TrackingGuard.ValidVisitor(visitorId)) return Results.BadRequest(new { error = "bad visitor id" });
     var w = await store.GetAsync("v-" + visitorId, ct);
     return w is null ? Results.NotFound() : Results.Ok(new { w.Name, w.ProductIds, w.UpdatedOn });
+});
+
+// ---- Accounts (sign-in is Firebase Authentication: Google and email link). The browser sends the sign-in proof as
+// "Authorization: Bearer <token>"; we verify it ourselves and keep only a random id, a username and the saved list. ----
+static async Task<SessionUser?> SignedIn(HttpContext ctx, FirebaseTokenVerifier auth, TrackingGuard guard, CancellationToken ct)
+{
+    ctx.Response.Headers.CacheControl = "no-store";
+    var h = ctx.Request.Headers.Authorization.ToString();
+    if (!h.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return null;
+    var user = await auth.VerifyAsync(h[7..].Trim(), ct);
+    if (user is null) return null;
+    if (guard.AllowAccount(user.Uid)) return user;
+    ctx.Items["limited"] = true;
+    return null;
+}
+
+// 429 when the person is over the limit, otherwise 401 (not signed in).
+static IResult Deny(HttpContext ctx) =>
+    ctx.Items.ContainsKey("limited") ? Results.StatusCode(StatusCodes.Status429TooManyRequests) : Results.Unauthorized();
+
+static object MeBody(UserProfile u) => new { username = u.Username, provider = u.Provider, createdOn = u.CreatedOn };
+
+app.MapGet("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    try { return Results.Ok(MeBody(await users.EnsureAsync(me.Uid, me.Provider, ct))); }
+    catch (Exception ex) { log.LogError(ex, "Could not load account"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+});
+
+app.MapGet("/api/me/username/available", async (string? name, HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IOptions<AuthOptions> opt, TrackingGuard guard, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    var lower = Usernames.Normalize(name);
+    var problem = Usernames.Validate(lower, opt.Value.BlockedNames);
+    if (problem is not null) return Results.Ok(new { available = false, reason = problem });
+    var taken = await users.UsernameTakenAsync(lower, ct);
+    return Results.Ok(new { available = !taken, reason = taken ? "That name is taken." : null });
+});
+
+// The username is chosen once and can never be changed (the claim is a single transaction, see UserStore).
+app.MapPost("/api/me/username", async (UsernameBody? body, HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IOptions<AuthOptions> opt, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    var lower = Usernames.Normalize(body?.Name);
+    var problem = Usernames.Validate(lower, opt.Value.BlockedNames);
+    if (problem is not null) return Results.BadRequest(new { error = problem });
+    try
+    {
+        await users.EnsureAsync(me.Uid, me.Provider, ct);
+        return await users.ClaimUsernameAsync(me.Uid, lower, ct) switch
+        {
+            ClaimResult.Ok => Results.Ok(new { username = lower }),
+            ClaimResult.Taken => Results.Conflict(new { error = "That name is taken." }),
+            ClaimResult.AlreadyHasUsername => Results.Conflict(new { error = "You already have a username, and it cannot be changed." }),
+            _ => Results.Unauthorized(),
+        };
+    }
+    catch (Exception ex) { log.LogError(ex, "Could not claim username"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+});
+
+app.MapGet("/api/me/wishlist", async (HttpContext ctx, FirebaseTokenVerifier auth, IDocStore<Wishlist> store, TrackingGuard guard, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    var w = await store.GetAsync("u-" + me.Uid, ct);
+    return Results.Ok(new { productIds = w?.ProductIds ?? Array.Empty<string>(), updatedOn = w?.UpdatedOn });
+});
+
+app.MapPut("/api/me/wishlist", async (WishBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
+    var ids = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(200).ToArray();
+    try
+    {
+        var now = DateTime.UtcNow.ToString("o");
+        var id = "u-" + me.Uid;
+        var w = await store.GetAsync(id, ct) ?? new Wishlist { Id = id, OwnerType = "user", OwnerId = me.Uid, CreatedOn = now };
+        w.ProductIds = ids;
+        w.UpdatedOn = now;
+        await store.UpsertAsync(w, ct);
+        return Results.Ok(new { productIds = ids, updatedOn = now });
+    }
+    catch (Exception ex) { log.LogError(ex, "Could not save account wishlist"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+});
+
+// On first sign-in the saved items from this browser join the account's list (nothing is lost, nothing is duplicated).
+app.MapPost("/api/me/claim", async (ClaimBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
+    var local = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(200).ToArray();
+    try
+    {
+        var now = DateTime.UtcNow.ToString("o");
+        var id = "u-" + me.Uid;
+        var w = await store.GetAsync(id, ct) ?? new Wishlist { Id = id, OwnerType = "user", OwnerId = me.Uid, CreatedOn = now };
+        // The account's items first, then this browser's new ones; the cap keeps the newest.
+        var merged = w.ProductIds.Where(known.Contains).Concat(local).Distinct().ToArray();
+        if (merged.Length > 200) merged = merged[^200..];
+        w.ProductIds = merged;
+        w.UpdatedOn = now;
+        await store.UpsertAsync(w, ct);
+
+        if (TrackingGuard.ValidVisitor(body?.VisitorId))
+        {
+            var v = await store.GetAsync("v-" + body!.VisitorId, ct);
+            if (v is not null && string.IsNullOrEmpty(v.ClaimedBy))
+            {
+                v.ClaimedBy = me.Uid;
+                await store.UpsertAsync(v, ct);
+            }
+        }
+        return Results.Ok(new { productIds = merged, updatedOn = now });
+    }
+    catch (Exception ex) { log.LogError(ex, "Could not claim visitor list"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+});
+
+// Delete my account data. (The browser removes the sign-in itself first; the token stays valid for up to an hour.)
+// The username stays reserved so nobody can pose as the old account.
+app.MapDelete("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    try
+    {
+        await store.DeleteAsync("u-" + me.Uid, ct);
+        await users.DeleteAsync(me.Uid, ct);
+        return Results.NoContent();
+    }
+    catch (Exception ex) { log.LogError(ex, "Could not delete account"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
 });
 
 app.MapGet("/robots.txt", () => Results.Text(

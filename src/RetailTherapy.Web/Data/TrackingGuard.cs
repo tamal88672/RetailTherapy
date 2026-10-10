@@ -53,4 +53,17 @@ public sealed class TrackingGuard
             return true;
         }
     }
+
+    /// <summary>Limits the account endpoints: a signed-in person may make this many calls in ten minutes.</summary>
+    public bool AllowAccount(string uid, int perTenMinutes = 120)
+    {
+        var key = "acct:" + uid;
+        lock (_lock)
+        {
+            var used = _cache.TryGetValue(key, out int n) ? n : 0;
+            if (used + 1 > perTenMinutes) return false;
+            _cache.Set(key, used + 1, TimeSpan.FromMinutes(10));
+            return true;
+        }
+    }
 }

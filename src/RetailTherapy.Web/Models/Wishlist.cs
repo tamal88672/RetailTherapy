@@ -23,6 +23,8 @@ public sealed class Wishlist : IHasId
     [FirestoreProperty] public string[] ProductIds { get; set; } = Array.Empty<string>();
     [FirestoreProperty] public string? CreatedOn { get; set; }
     [FirestoreProperty] public string? UpdatedOn { get; set; }
+    /// <summary>For an anonymous visitor's list: the user id that took it over when they signed in (the list is kept for the reports).</summary>
+    [FirestoreProperty] public string? ClaimedBy { get; set; }
 }
 
 /// <summary>One thing a visitor did, kept for the reports: saved a product, removed it, or clicked through to Amazon.</summary>
