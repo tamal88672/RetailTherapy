@@ -27,7 +27,7 @@
 
 * { box-sizing: border-box; }
 html { background: var(--bg); }
-/* the page color lives on <html> only, so the night sky (z-index -1) can show above it and below the content */
+/* the page color lives on the root element only, so the night sky (z-index -1) can show above it and below the content */
 body { margin: 0; color: var(--ink); font: 16px/1.5 Nunito, ui-rounded, system-ui, sans-serif; }
 a { color: inherit; }
 
@@ -159,7 +159,7 @@ a { color: inherit; }
 :root[data-theme="dark"] .chip:hover:not(.on) { box-shadow: 0 0 12px rgba(255,79,216,.45); }
 :root[data-theme="dark"] #q:focus { outline-color: #ff4fd8; box-shadow: 0 0 16px rgba(255,79,216,.5); }
 
-:root[data-theme="dark"] .art { background: linear-gradient(150deg, hsl(calc(268 + var(--h) * .25) 80% 24%), hsl(calc(300 + var(--h) * .15) 88% 44%)); }
+:root[data-theme="dark"] .art { background: linear-gradient(150deg, hsl(calc(268 + var(--h) * .22) 80% 24%), hsl(calc(295 + var(--h) * .12) 88% 44%)); }
 
 /* sparkles on the product pictures: a few twinkle at rest, every tile you point at gets both */
 :root[data-theme="dark"] .art::before, :root[data-theme="dark"] .art::after { position: absolute; z-index: 2; pointer-events: none; opacity: 0; color: #fff;
