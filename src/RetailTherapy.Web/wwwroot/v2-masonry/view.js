@@ -17,7 +17,8 @@ RT.ready(function () {
     if (!list.length) { grid.innerHTML = '<p class="empty">No matches. Try another search.</p>'; return; }
     grid.innerHTML = list.map(function (p, i) {
       var art = RT.art(p, "", "--r:" + ratios[i % ratios.length]).replace(/<\/div>$/, (p.badge ? '<span class="tag">' + RT.esc(p.badge) + "</span>" : "") + "</div>");
-      return '<article class="card">' + art + '<div class="body"><h3>' + RT.esc(p.title) + "</h3><p>" + RT.esc(p.blurb) + "</p>" + RT.cta(p, "See on Amazon") + "</div></article>";
+      // .tile is the fixed hover area; .card inside it is what pops up (see style.css).
+      return '<article class="tile"><div class="card">' + art + '<div class="body"><h3>' + RT.esc(p.title) + "</h3><p>" + RT.esc(p.blurb) + "</p>" + RT.cta(p, "See on Amazon") + "</div></div></article>";
     }).join("");
     RT.mountAds();
   }

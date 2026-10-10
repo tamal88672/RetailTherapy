@@ -4,6 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Retail Therapy | Masonry</title>
+  <script>
+    // Pick Day or Night before the first paint so there is no flash. Default: follow the device setting.
+    (function () {
+      var m = "system";
+      try { m = localStorage.getItem("rt-theme") || "system"; } catch (e) {}
+      var dark = m === "dark" || (m !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
@@ -16,10 +25,12 @@
   <meta name="theme-color" content="#e8455a">
 </head>
 <body>
+  <div class="sky" aria-hidden="true"><i></i></div>
   <header class="bar">
     <div class="bar-in">
       <a class="logo" href="#"><img class="logo-mark" src="/favicon.svg" alt="" width="30" height="30"><span data-site-name></span></a>
       <input id="q" type="search" placeholder="Search finds…" aria-label="Search">
+      <div class="theme" data-theme-toggle role="group" aria-label="Color theme"></div>
     </div>
     <div class="chips" id="chips" role="tablist" aria-label="Categories"></div>
     <p class="disc" data-disclosure></p>
@@ -55,6 +66,7 @@
     <p><a href="../legal.html">Disclosure &amp; Privacy</a> · &copy; <span data-year></span> <span data-site-name></span></p>
   </footer>
 
+  <script src="../shared/theme.js"></script>
   <script src="../shared/app.js"></script>
   <script src="view.js"></script>
   <script>
