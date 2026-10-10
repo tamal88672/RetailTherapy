@@ -227,7 +227,13 @@ a.chip { text-decoration: none; display: inline-block; }
 :root[data-theme="dark"] .hash { color: #d9b8f5; }
 :root[data-theme="dark"] .hash:hover { color: #ff8be8; box-shadow: 0 0 10px rgba(255,79,216,.45); }
 
+.hash.top { color: var(--ink); }
+:root[data-theme="dark"] .hash.top { color: #fff; }
 .feed { min-width: 0; }
+.note-box small { color: var(--muted); font-size: 12px; }
+.related { margin-top: 12px; }
+.more-h { margin: 28px 0 14px; font-size: 18px; line-height: 1.3; }
+.more-h b { color: var(--accent); }
 .note { display: contents; }
 .note-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin: 0 0 16px; padding: 10px 14px;
   border-radius: 14px; background: var(--tip-bg); font-size: 14px; }

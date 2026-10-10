@@ -70,7 +70,7 @@ public sealed class ListCatalog
         finally { _gate.Release(); }
     }
 
-    /// <summary>Hand-placed products first (in the order given), then rule matches (most popular first). Empty lists are hidden.</summary>
+    /// <summary>Hand-placed products first (in the order given), then rule matches (best tag fit first). Empty lists are hidden.</summary>
     public static ListDto? Resolve(CuratedList l, IReadOnlyList<ProductDto> products)
     {
         var known = products.Select(p => p.Id).ToHashSet();
@@ -82,14 +82,17 @@ public sealed class ListCatalog
         var cats = (l.Categories ?? Array.Empty<string>()).Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
         if (tags.Length > 0 || cats.Length > 0)
         {
+            // A product qualifies for the tag rule when one of the tags is in its top 3. Best fit first, then catalog order.
             var limit = l.Limit > 0 ? l.Limit : 12;
-            foreach (var p in products)
+            var matches = products
+                .Select((p, order) => (p, order, fit: tags.Length == 0 ? 0 : p.TopTagScore(tags)))
+                .Where(x => !ids.Contains(x.p.Id) && x.fit >= 0 &&
+                            (cats.Length == 0 || cats.Any(c => string.Equals(c, x.p.Category, StringComparison.OrdinalIgnoreCase))))
+                .OrderByDescending(x => x.fit).ThenBy(x => x.order);
+            foreach (var m in matches)
             {
                 if (ids.Count >= limit) break;
-                if (ids.Contains(p.Id)) continue;
-                var catOk = cats.Length == 0 || cats.Any(c => string.Equals(c, p.Category, StringComparison.OrdinalIgnoreCase));
-                var tagOk = tags.Length == 0 || p.Tags.Any(t => tags.Contains(t));
-                if (catOk && tagOk) ids.Add(p.Id);
+                ids.Add(m.p.Id);
             }
         }
         return ids.Count == 0 ? null : new ListDto(l.Id, l.Title, l.Blurb, l.Emoji, l.Hue, ids.ToArray());

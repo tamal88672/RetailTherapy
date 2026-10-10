@@ -14,6 +14,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
+## [1.7.0] - 2026-10-10 (code pushed, waiting to be deployed with 1.5.0 and 1.6.0)
+
+### Added
+- **Ranked tags.** Every tag now has a relevance score (0 to 100) for each product. The site scores them with a TF-IDF method: a word in the title counts more than one in a feature line, and a tag found on few products counts more than one found on almost all of them. Product types (serum, air fryer, tumbler...) are tags too, so a tag leads to genuinely similar products.
+- Tiles show each product's **top 3 tags, best first**. Hovering a tag shows its match score.
+- **Tag pages follow a top-3 rule.** Clicking a tag lists the products where it is in the top 3, best fit first. A short list is topped up with an "Also related" group (the tag ranks lower on those products).
+- Tags that repeat each other are merged (fryer / air fryer, patch / pimple patch), and "fragrance-free" is not read as a fragrance.
+- API: `GET /api/products` includes `tags` (best first) and `tagScores`.
+
+### Changed
+- Sessions lists use the same top-3 rule and show the best tag fit first.
+- Tags typed by hand (on `quick-add` or the product) always rank first. Without them, the site does the ranking, so nothing is saved for you.
+- Search matches all of a product's ranked tags.
+
+### Removed
+- `POST /api/admin/retag`: tags are ranked automatically every time the catalog refreshes.
+
 ## [1.6.0] - 2026-10-09 (code pushed, waiting to be deployed with 1.5.0)
 
 ### Added

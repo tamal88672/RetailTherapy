@@ -40,10 +40,11 @@ public sealed class ProductCatalog
 
             var all = await _store.ListAsync(CancellationToken.None);
             var tag = _site.Value.AmazonTag;
-            var items = all.Where(p => p.Active)
+            var active = all.Where(p => p.Active)
                 .OrderBy(p => p.Order).ThenBy(p => p.Title, StringComparer.OrdinalIgnoreCase)
-                .Select(p => ProductDto.From(p, tag))
                 .ToList();
+            var ranks = TagRanker.RankAll(active);   // tags need the whole catalog (rarer tags are worth more)
+            var items = active.Select(p => ProductDto.From(p, tag, ranks[p.Id])).ToList();
             var snap = new CatalogSnapshot(items, ComputeETag(items));
             if (items.Count > 0) _cache.Set(Key, snap, _ttl); // never cache an empty result
             return snap;

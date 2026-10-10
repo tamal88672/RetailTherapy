@@ -66,7 +66,14 @@ curl -X DELETE "$URL/api/admin/products/vitamin-c-serum" -H "X-Admin-Key: $KEY"
 Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL (Cloudinary works well; a dead link falls back to the emoji tile). `"url"` takes a SiteStripe link (amzn.to / a.co links are opened once when saved to check they carry your tag; if not, they are replaced by the full product link with your tag). A Make.com scenario can call the same PUT endpoint.
 
 ## Tags, Therapy Sessions, saved items and the report
-**Tags.** Every product shows up to three `#tags` under it (clicking one filters the page). Tags are saved on the product (`"tags": ["gift idea","viral"]`); a product without any gets them worked out from its title and feature lines (`Data/Tagger.cs` lists the words). Make.com can send an optional `tags` field to `quick-add`. `POST /api/admin/retag` saves worked-out tags on every product that has none (`?force=true` redoes all).
+**Tags.** Every product shows its top three `#tags` under it, most relevant first (hover one to see its match score). The site ranks tags itself (`Data/TagRanker.cs`):
+1. Candidates are theme tags (gift idea, viral, cozy... listed in `Data/Tagger.cs`) and product types (serum, air fryer, tumbler...).
+2. A word counts more where it matters more: title 3, blurb 2, feature lines 1.5, badge 1.
+3. A tag found on few products is worth more than one found on nearly all (rarity weight, as search engines do).
+4. Scores are put on a 0 to 100 scale. Tags under 22 are dropped; tags that repeat another (fryer / air fryer) are merged.
+5. Tags you type yourself (the `tags` field) always rank first.
+
+Clicking a tag shows the products where it is in the **top three**, best fit first. If that gives fewer than 8, the list is topped up under "Also related" with products that carry the tag further down. Sessions lists use the same top-three rule. Ranking is redone whenever the catalog refreshes, so it adapts as products are added. Make.com can send an optional `tags` field to `quick-add`; leave it out and the site does the ranking. `GET /api/products` returns `tags` (best first) and `tagScores` (0-100) for each product.
 
 **Therapy Sessions** (`/sessions`) is the curated-lists page. Each list has a title, blurb, emoji and a set of products: ones you pin by id (`productIds`, in order), then every product matching the rule (`categories` and/or `tags`, most popular first) up to `limit`. Eight starter lists load on first start. Rename the page with `Site__ListsName`.
 ```

@@ -23,21 +23,31 @@ public sealed class Product
     [FirestoreProperty] public bool Active { get; set; } = true;
     /// <summary>Day the product was posted (yyyy-MM-dd). The newest day is shown in the "New" tab.</summary>
     [FirestoreProperty] public string? AddedOn { get; set; }
-    /// <summary>Short lowercase labels shown under the product (e.g. "gift idea"). Empty = worked out from the text.</summary>
+    /// <summary>Tags typed by hand (e.g. "gift idea"); they always rank first. Empty = the site ranks tags itself.</summary>
     [FirestoreProperty] public string[] Tags { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>What the public API returns. The affiliate URL is built on the server.</summary>
 public sealed record ProductDto(
     string Id, string Title, string Category, string Emoji, int Hue,
-    string? Image, string Blurb, string[] Pros, string? Badge, string Url, string? AddedOn, string[] Tags)
+    string? Image, string Blurb, string[] Pros, string? Badge, string Url, string? AddedOn,
+    string[] Tags, int[] TagScores)
 {
-    public static ProductDto From(Product p, string amazonTag) => new(
+    /// <summary><paramref name="ranked"/> is this product's tags, most relevant first (see TagRanker).</summary>
+    public static ProductDto From(Product p, string amazonTag, RetailTherapy.Web.Data.RankedTag[] ranked) => new(
         p.Id, p.Title, p.Category, p.Emoji, p.Hue,
         NullIfEmpty(p.Image), p.Blurb, p.Pros ?? Array.Empty<string>(), NullIfEmpty(p.Badge),
         AffiliateLinks.Build(p, amazonTag), NullIfEmpty(p.AddedOn),
-        // Products saved before tags existed get theirs worked out from the text, so every tile shows some.
-        p.Tags is { Length: > 0 } ? p.Tags : RetailTherapy.Web.Data.Tagger.Derive(p));
+        ranked.Select(t => t.Tag).ToArray(), ranked.Select(t => t.Score).ToArray());
+
+    /// <summary>How well this product fits any of the given tags: the best score among them that sit in its top 3, or -1 if none does.</summary>
+    public int TopTagScore(IReadOnlyCollection<string> tags)
+    {
+        var best = -1;
+        for (var i = 0; i < Math.Min(RetailTherapy.Web.Data.TagRanker.TopN, Tags.Length); i++)
+            if (tags.Contains(Tags[i])) best = Math.Max(best, TagScores[i]);
+        return best;
+    }
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 }

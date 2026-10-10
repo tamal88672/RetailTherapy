@@ -1,19 +1,18 @@
 using System.Text.RegularExpressions;
-using RetailTherapy.Web.Models;
 
 namespace RetailTherapy.Web.Data;
 
 /// <summary>
-/// Short labels shown under each product ("gift idea", "viral", "cozy"...). They are worked out from the title and
-/// feature lines when a product has none of its own, and they power the clickable tags and the curated lists.
+/// The tag vocabulary ("themes" such as gift idea, viral, cozy) and tag text helpers.
+/// Which tags a product gets, and in what order, is decided by <see cref="TagRanker"/>.
 /// </summary>
 public static class Tagger
 {
-    private const RegexOptions Opts = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled;
+    private const RegexOptions Opts = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
     private static readonly TimeSpan Limit = TimeSpan.FromMilliseconds(250);
 
-    // The full set of labels the site knows. Order is the tie-breaker when two labels match equally well.
-    private static readonly (string Tag, Regex Rx)[] Vocabulary =
+    /// <summary>Theme tags and the wording that signals them in a title, blurb or feature line.</summary>
+    public static readonly (string Tag, Regex Rx)[] Themes =
     {
         ("bestseller",      R(@"#\s?1\b|best[\s-]?sell(?:er|ers|ing)\b|amazon'?s choice|top[\s-]rated|award[\s-]winning")),
         ("viral",           R(@"\bviral\b|tiktok|booktok|trending|obsessed|internet'?s? favou?rite")),
@@ -28,41 +27,20 @@ public static class Tagger
         ("eco-friendly",    R(@"eco[\s-]?friendly|sustainab\w*|reusable|biodegradable|bamboo|recycled|plastic[\s-]free|organic|refillable|compostable|zero[\s-]waste")),
         ("clean beauty",    R(@"\bvegan\b|cruelty[\s-]free|fragrance[\s-]free|paraben[\s-]free|sulfate[\s-]free|hypoallergenic|dermatologist|sensitive skin|\bgentle\b")),
         ("summer",          R(@"\bsummer\b|\bspf\b|sunscreen|sunblock|swim\w*|bikini|\bbeach\b|sandals?\b|cooling|sun[\s-]?protect\w*|lightweight")),
+        ("date night",      R(@"date[\s-]night|romantic|pheromone|perfume|fragrance(?![\s-]?free)|lip stain")),
+        ("dupe",            R(@"\bdupes?\b|alternative to|inspired by")),
+        // books
         ("page-turner",     R(@"page[\s-]?turner|couldn'?t put (?:it )?down|gripping|\bbinge\b|addictive|unputdownable|edge of your seat|cliffhanger|\btwists?\b")),
         ("series",          R(@"\bbook\s*\d|\bseries\b|trilogy|\bsaga\b|box set|\bvol(?:ume)?\.?\s*\d")),
-        ("dupe",            R(@"\bdupes?\b|alternative to|inspired by")),
-        ("date night",      R(@"date[\s-]night|romantic|pheromone|perfume|fragrance|lip stain")),
+        ("romance",         R(@"\bromance\b|romantasy|rom-com|enemies to lovers|slow burn|love story")),
+        ("thriller",        R(@"thriller|suspense|psychological|whodunit|murder mystery|\bmystery\b")),
+        ("fantasy",         R(@"\bfantasy\b|romantasy|\bfae\b|dragons?\b|magic\b")),
+        ("self-help",       R(@"self[\s-]?help|\bhabits?\b|mindset|personal growth|productivity|boundaries")),
     };
 
     private static Regex R(string pattern) => new(pattern, Opts, Limit);
 
-    /// <summary>The labels the site can pick on its own (handy for the admin and for list rules).</summary>
-    public static IEnumerable<string> Known => Vocabulary.Select(v => v.Tag);
-
-    public static string[] Derive(Product p) =>
-        Derive(p.Title, new[] { p.Blurb }.Concat(p.Pros ?? Array.Empty<string>()), p.Category, p.Badge);
-
-    /// <summary>Up to three labels. A match in the title counts double compared with one in the feature lines.</summary>
-    public static string[] Derive(string title, IEnumerable<string> features, string category, string? badge = null)
-    {
-        title = $"{title} {badge}".Trim();
-        var rest = string.Join(" ", features.Where(f => !string.IsNullOrWhiteSpace(f)));
-        var picked = new List<string>();
-        try
-        {
-            picked = Vocabulary
-                .Select((v, i) => (v.Tag, Order: i, Hits: (v.Rx.IsMatch(title) ? 2 : 0) + (v.Rx.IsMatch(rest) ? 1 : 0)))
-                .Where(x => x.Hits > 0)
-                .OrderByDescending(x => x.Hits).ThenBy(x => x.Order)
-                .Take(3).Select(x => x.Tag).ToList();
-        }
-        catch (RegexMatchTimeoutException) { /* odd text: fall through to the group label */ }
-
-        if (picked.Count == 0) picked.Add(Group(category));
-        return picked.ToArray();
-    }
-
-    /// <summary>Every product gets at least its broad group label, even when nothing more specific matched.</summary>
+    /// <summary>The broad label every product can fall back on, so no tile is ever without a tag.</summary>
     public static string Group(string category)
     {
         var c = (category ?? "").ToLowerInvariant();

@@ -32,6 +32,9 @@ public static class QuickAdd
         ("Home & Gifts", "🎁", 285, new[] { "blanket", "candle", "diffuser", "decor", "pillow", "organizer", "storage", "gift", "lamp", "towel", "sheet", "humidifier", "wall art", "planter" }),
     };
 
+    /// <summary>Product-type words from the category lists (serum, air fryer, tumbler...). The tag ranker uses them as tags.</summary>
+    public static IEnumerable<string> ProductTypeWords => ProductCategories.SelectMany(c => c.Words);
+
     private const string Fallback = "Home & Gifts";
     private static readonly Regex Price = new(@"\$\s*\d|\d\s*%\s*off|\bsave\s+\d", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
@@ -146,9 +149,8 @@ public static class QuickAdd
         var image = F("image");
         var score = Popularity(title + " " + string.Join(" ", features));
 
-        // Labels: sent by hand ("tags" field) or worked out from the text.
+        // Tags sent by hand ("tags" field, comma separated) always come first. Otherwise the site ranks tags itself.
         var tags = Tagger.Parse(F("tags"));
-        if (tags.Length == 0) tags = Tagger.Derive(title, features, category);
 
         error = null;
         return new Product

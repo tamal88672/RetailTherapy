@@ -214,8 +214,7 @@ admin.MapPut("/products/{id}", async (string id, Product p, ProductCatalog catal
     if (string.IsNullOrWhiteSpace(p.Asin) && string.IsNullOrWhiteSpace(p.Url))
         return Results.BadRequest(new { error = "provide asin or url" });
     p.Id = id;
-    p.Tags = Tagger.Clean(p.Tags);
-    if (p.Tags.Length == 0) p.Tags = Tagger.Derive(p);
+    p.Tags = Tagger.Clean(p.Tags);   // hand-typed tags only; the site ranks the rest itself
     if (!string.IsNullOrWhiteSpace(p.Url))
     {
         var checkedLink = await LinkGuard.EnsureAsync(p.Url!, site.AmazonTag, http.CreateClient("amazon"), ct);
@@ -322,22 +321,6 @@ admin.MapGet("/audit-links", async (bool? fix, ProductCatalog catalog, IHttpClie
         applied = fix == true,
         changed
     });
-});
-
-// Saves tags on every product that has none (or on all of them with ?force=true), so they can be edited later.
-// Products without saved tags already show worked-out ones, so this is optional.
-admin.MapPost("/retag", async (bool? force, ProductCatalog catalog, CancellationToken ct) =>
-{
-    var all = await catalog.ListAllAsync(ct);
-    var changed = 0;
-    foreach (var p in all)
-    {
-        if (force != true && p.Tags is { Length: > 0 }) continue;
-        p.Tags = Tagger.Derive(p);
-        await catalog.UpsertAsync(p, ct);
-        changed++;
-    }
-    return Results.Ok(new { total = all.Count, changed, forced = force == true });
 });
 
 // ---- Curated lists ("Therapy Sessions") ----

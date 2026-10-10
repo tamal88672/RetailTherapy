@@ -41,24 +41,53 @@
     return out;
   };
 
-  // Labels shown under a product ("gift idea", "viral"...). The server always sends some.
-  RT.tagsOf = function (p) { return p.tags || []; };
+  // Tags come from the server ranked by relevance (p.tags best first, p.tagScores 0-100 alongside).
+  // A tag "counts" for a product when it is one of its top 3. Tiles show those three, best first.
+  RT.TOP = 3;
+  RT.tagsOf = function (p) { return (p.tags || []).slice(0, RT.TOP); };
+
+  // How well a product fits a tag: its 0-100 score if the tag is in the product's top 3, otherwise -1.
+  RT.tagFit = function (p, tag) {
+    var t = p.tags || [], i = t.indexOf(tag);
+    return i > -1 && i < RT.TOP ? (p.tagScores || [])[i] : -1;
+  };
+  // Looser fit for "also related": the tag is on the product but not in its top 3 (score, or -1).
+  RT.tagRelated = function (p, tag) {
+    var t = p.tags || [], i = t.indexOf(tag);
+    return i >= RT.TOP ? (p.tagScores || [])[i] : -1;
+  };
 
   RT.byId = function (id) {
     for (var i = 0; i < P.length; i++) if (P[i].id === id) return P[i];
     return null;
   };
 
-  // cat: a category chip ("All", "New" or a category name). q: search text (title, blurb, category, tags). tag: one label.
+  function catOk(p, cat, latest) {
+    return !cat || cat === "All" || (cat === "New" ? (latest && p.addedOn === latest) : p.category === cat);
+  }
+  function textOk(p, q) {
+    return !q || (p.title + " " + p.blurb + " " + p.category + " " + (p.tags || []).join(" ")).toLowerCase().indexOf(q) > -1;
+  }
+
+  // cat: a category chip ("All", "New" or a category name). q: search text (title, blurb, category, tags).
+  // tag: when set, only products with that tag in their top 3, the best fit first.
   RT.filter = function (cat, q, tag) {
     q = (q || "").trim().toLowerCase();
     var latest = cat === "New" ? RT.latestBatch() : "";
-    return P.filter(function (p) {
-      var okCat = !cat || cat === "All" || (cat === "New" ? (latest && p.addedOn === latest) : p.category === cat);
-      var okQ = !q || (p.title + " " + p.blurb + " " + p.category + " " + RT.tagsOf(p).join(" ")).toLowerCase().indexOf(q) > -1;
-      var okTag = !tag || RT.tagsOf(p).indexOf(tag) > -1;
-      return okCat && okQ && okTag;
-    });
+    var out = P.filter(function (p) { return catOk(p, cat, latest) && textOk(p, q) && (!tag || RT.tagFit(p, tag) > -1); });
+    if (tag) out.sort(function (a, b) { return RT.tagFit(b, tag) - RT.tagFit(a, tag); });   // stable: ties keep popularity order
+    return out;
+  };
+
+  // "Also related": products that carry the tag but not in their top 3, best fit first. Only used to fill up a short
+  // result list, so a rare tag still shows something useful (up to `fill` products in total).
+  RT.related = function (cat, q, tag, have, fill) {
+    if (!tag || have >= fill) return [];
+    q = (q || "").trim().toLowerCase();
+    var latest = cat === "New" ? RT.latestBatch() : "";
+    var out = P.filter(function (p) { return catOk(p, cat, latest) && textOk(p, q) && RT.tagRelated(p, tag) > -1; });
+    out.sort(function (a, b) { return RT.tagRelated(b, tag) - RT.tagRelated(a, tag); });
+    return out.slice(0, fill - have);
   };
 
   // Product picture: real image if provided, otherwise a colored emoji tile.
@@ -91,8 +120,10 @@
   RT.tile = function (p, ratio) {
     var badge = p.badge ? '<span class="tag">' + RT.esc(p.badge) + "</span>" : "";
     var heart = RT.heart ? RT.heart(p) : "";
-    var tags = RT.tagsOf(p).map(function (t) {
-      return '<button type="button" class="hash" data-tag="' + RT.esc(t) + '" aria-label="Show finds tagged ' + RT.esc(t) + '">#' + RT.esc(t) + "</button>";
+    var scores = p.tagScores || [];
+    var tags = RT.tagsOf(p).map(function (t, i) {
+      return '<button type="button" class="hash' + (i === 0 ? " top" : "") + '" data-tag="' + RT.esc(t) + '" title="' + RT.esc(t) + " &middot; " + (scores[i] || 0) +
+        '% match" aria-label="Show finds tagged ' + RT.esc(t) + '">#' + RT.esc(t) + "</button>";
     }).join("");
     return '<article class="tile" data-id="' + RT.esc(p.id) + '"><div class="card">' +
       RT.art(p, "", "--r:" + (ratio || "1/1"), badge + heart) +
