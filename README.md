@@ -5,12 +5,14 @@ ASP.NET Core minimal API + plain JavaScript front end. Three designs, one ad rai
 ```
 src/RetailTherapy.Web/
   Program.cs               API, static files, admin endpoints
-  Data/                    IProductStore, Firestore store, JSON store (local), ProductCatalog (memory cache)
-  Models/                  Product, ProductDto, SiteOptions
-  Seed/products.json       starter products (loaded into an empty store on first start)
+  Data/                    product stores (Firestore, JSON for local), ProductCatalog (memory cache), Tagger, ListCatalog,
+                           DocStore (lists + wishlists), EventStore (saves/clicks), TrackingGuard
+  Models/                  Product, ProductDto, CuratedList, Wishlist, TrackEvent, SiteOptions
+  Seed/                    products.json and lists.json (starters, loaded into an empty store on first start)
   wwwroot/
     v1-magazine/ v2-masonry/ v3-compact/   the three designs
-    shared/                app.js (loads /api data, ad mounting), ads.css
+    v2-masonry/sessions.html  the curated-lists page, served at /sessions
+    shared/                app.js (data, tiles, ads), wish.js (hearts + tracking), theme.js (day/night), ads.css
     preview/               side-by-side chooser at /preview/
     legal.html             affiliate disclosure + privacy template
 Dockerfile, deploy.sh      Cloud Run
@@ -44,6 +46,7 @@ First request after idle is a cold start (about a second). Set `--min-instances 
 | `Site__Ads__Client` | AdSense publisher ID (placeholders show while it contains `XXXX`) |
 | `Site__Ads__SlotSidebar` / `SlotInline` | AdSense ad unit IDs |
 | `Site__ContactEmail`, `Site__Name`, `Site__Tagline` | text on the site |
+| `Site__ListsName`, `Site__ListsTagline` | what the curated-lists page is called ("Therapy Sessions") and its subtitle |
 | `Admin__ApiKey` | key for the admin API (a Secret Manager secret in deploy.sh) |
 
 ## Manage products (no redeploy)
@@ -61,6 +64,25 @@ curl -X DELETE "$URL/api/admin/products/vitamin-c-serum" -H "X-Admin-Key: $KEY"
 **New tab:** every product has an `addedOn` date (yyyy-MM-dd). A product added through the admin API is dated today unless you pass `"addedOn"`. The New tab shows the latest day's batch. Products are categorized when they are added, so after that day they simply drop out of New and stay in their category. **Sorting:** the site lists products by `order` (lowest first), so ranking by popularity means setting `order`.
 
 Set `"active": false` to hide a product without deleting it. `"image"` takes any image URL (Cloudinary works well; a dead link falls back to the emoji tile). `"url"` takes a SiteStripe link (amzn.to / a.co links are opened once when saved to check they carry your tag; if not, they are replaced by the full product link with your tag). A Make.com scenario can call the same PUT endpoint.
+
+## Tags, Therapy Sessions, saved items and the report
+**Tags.** Every product shows up to three `#tags` under it (clicking one filters the page). Tags are saved on the product (`"tags": ["gift idea","viral"]`); a product without any gets them worked out from its title and feature lines (`Data/Tagger.cs` lists the words). Make.com can send an optional `tags` field to `quick-add`. `POST /api/admin/retag` saves worked-out tags on every product that has none (`?force=true` redoes all).
+
+**Therapy Sessions** (`/sessions`) is the curated-lists page. Each list has a title, blurb, emoji and a set of products: ones you pin by id (`productIds`, in order), then every product matching the rule (`categories` and/or `tags`, most popular first) up to `limit`. Eight starter lists load on first start. Rename the page with `Site__ListsName`.
+```
+curl "$URL/api/admin/lists" -H "X-Admin-Key: $KEY"
+curl -X PUT "$URL/api/admin/lists/mothers-day" -H "X-Admin-Key: $KEY" -H "Content-Type: application/json" \
+  -d '{"title":"Mother'"'"'s Day","emoji":"💐","hue":340,"blurb":"For her.","order":9,"productIds":["vitamin-c-serum"],"tags":["gift idea"],"categories":["Skincare"],"limit":10}'
+curl -X DELETE "$URL/api/admin/lists/mothers-day" -H "X-Admin-Key: $KEY"
+```
+Set `"active": false` to hide a list. Public: `GET /api/lists` (ids only; the page joins them with `/api/products`).
+
+**Saved items (heart).** Each product has a heart. The list is kept in the visitor's browser and shown by the heart button in the top bar. Every save, removal and click-through to Amazon is sent to `POST /api/track` with a random anonymous visitor id (no name or email); the list itself is also copied to the server (`PUT /api/wishlist`). Collections: `wishlists` (one document per visitor, with `ownerType`, `ownerId`, `visibility` and `shareCode` ready for accounts and sharing lists between users) and `events`.
+
+**Report.** `GET /api/admin/stats?days=30` returns saves, removals, click-throughs, visitors, the most saved products (now and in the period), the most clicked, and a per-day count. Each event read is one database read, so it reads at most `limit` events (default 5000).
+```
+curl "$URL/api/admin/stats?days=7" -H "X-Admin-Key: $KEY"
+```
 
 ## Ads that don't get in the way
 - Desktop: sticky 300x600 side rail that never overlays content.

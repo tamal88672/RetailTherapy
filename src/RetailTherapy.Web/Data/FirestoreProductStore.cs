@@ -49,6 +49,10 @@ public static class FirestoreRegistration
         var collection = config["Storage:Collection"] ?? "products";
         services.AddSingleton(_ => FirestoreDb.Create(projectId));
         services.AddSingleton<IProductStore>(sp => new FirestoreProductStore(sp.GetRequiredService<FirestoreDb>(), collection));
+        // Curated lists, saved-item lists and the visitor-action log live in their own collections.
+        services.AddSingleton<IDocStore<CuratedList>>(sp => new FirestoreDocStore<CuratedList>(sp.GetRequiredService<FirestoreDb>(), config["Storage:ListsCollection"] ?? "lists"));
+        services.AddSingleton<IDocStore<Wishlist>>(sp => new FirestoreDocStore<Wishlist>(sp.GetRequiredService<FirestoreDb>(), config["Storage:WishlistsCollection"] ?? "wishlists"));
+        services.AddSingleton<IEventStore>(sp => new FirestoreEventStore(sp.GetRequiredService<FirestoreDb>(), config["Storage:EventsCollection"] ?? "events"));
         return services;
     }
 }

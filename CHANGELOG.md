@@ -14,6 +14,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
+## [1.6.0] - 2026-10-09 (code pushed, waiting to be deployed with 1.5.0)
+
+### Added
+- **Therapy Sessions page** at `/sessions`: curated lists, each a themed shelf of products (title, blurb, emoji, product tiles). The name is a setting (`Site__ListsName`), so renaming it never touches the code. Eight starter lists: Glow-Up Session, Cozy Night In, Gift Shelf, Going Viral, Page-Turner Club, Kitchen Wins, Summer Ready, Pack & Go. A list can pin products by hand and/or pull in every product that matches a category or tag.
+- **Tags under every product** (for example `#gift idea`, `#viral`, `#cozy`). Click one to filter the page by it. Products without saved tags get them worked out from their title and feature lines, so every tile has some from day one. Make.com can send an optional `tags` field.
+- **Wishlist heart** on every product picture (works in Day and Night, with a small pop when saved). A heart button with a count in the top bar opens "Your saved finds". Saved items stay in the visitor's browser and are copied to the server.
+- **Tracking:** every save, removal and click-through to Amazon is recorded with a random anonymous visitor id (no name or email). Rate limits keep it cheap and hard to abuse.
+- **Ready for accounts and shared lists:** saved lists are stored as wishlist documents with an owner type and id (anonymous visitor today, user later), a visibility setting and a share code. Nothing else needs to change for a signed-in user to claim a visitor's list.
+- Admin endpoints: `GET /api/admin/stats` (report of saves, removals, clicks, most-saved products, per-day counts), `GET/PUT/DELETE /api/admin/lists`, `POST /api/admin/retag`.
+- Public endpoints: `GET /api/lists`, `POST /api/track`, `PUT /api/wishlist`, `GET /api/wishlist/{visitorId}`.
+- Disclosure and Privacy page explains the saved list and the anonymous counts.
+
+### Changed
+- The top bar has a heart button next to the Day / Auto / Night switch, and the category row starts with a link to the Sessions page.
+- The category row is a plain group of buttons (it was marked as tabs, which was not accurate).
+- Search also looks at tags.
+- Products now carry a `tags` field. Older products without it keep working.
+- Night sparkles on pictures moved to the bottom-right corner to make room for the heart.
+
 ## [1.5.0] - 2026-10-09 (code pushed, waiting to be deployed)
 
 ### Added

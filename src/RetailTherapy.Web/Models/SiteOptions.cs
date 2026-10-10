@@ -10,6 +10,9 @@ public sealed class SiteOptions
     public string Disclosure { get; set; } = "As an Amazon Associate I earn from qualifying purchases.";
     /// <summary>Folder under wwwroot served at "/": v1-magazine, v2-masonry or v3-compact.</summary>
     public string LiveDesign { get; set; } = "v2-masonry";
+    /// <summary>What the curated-lists page is called on the site (it lives at /sessions). Rename it here, nothing else changes.</summary>
+    public string ListsName { get; set; } = "Therapy Sessions";
+    public string ListsTagline { get; set; } = "Hand-picked shelves, one mood at a time.";
     public AdOptions Ads { get; set; } = new();
 }
 

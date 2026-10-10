@@ -41,22 +41,33 @@
     return out;
   };
 
-  RT.filter = function (cat, q) {
+  // Labels shown under a product ("gift idea", "viral"...). The server always sends some.
+  RT.tagsOf = function (p) { return p.tags || []; };
+
+  RT.byId = function (id) {
+    for (var i = 0; i < P.length; i++) if (P[i].id === id) return P[i];
+    return null;
+  };
+
+  // cat: a category chip ("All", "New" or a category name). q: search text (title, blurb, category, tags). tag: one label.
+  RT.filter = function (cat, q, tag) {
     q = (q || "").trim().toLowerCase();
     var latest = cat === "New" ? RT.latestBatch() : "";
     return P.filter(function (p) {
       var okCat = !cat || cat === "All" || (cat === "New" ? (latest && p.addedOn === latest) : p.category === cat);
-      var okQ = !q || (p.title + " " + p.blurb + " " + p.category).toLowerCase().indexOf(q) > -1;
-      return okCat && okQ;
+      var okQ = !q || (p.title + " " + p.blurb + " " + p.category + " " + RT.tagsOf(p).join(" ")).toLowerCase().indexOf(q) > -1;
+      var okTag = !tag || RT.tagsOf(p).indexOf(tag) > -1;
+      return okCat && okQ && okTag;
     });
   };
 
   // Product picture: real image if provided, otherwise a colored emoji tile.
-  RT.art = function (p, cls, extraStyle) {
+  // extra: optional HTML placed on top of the picture (a badge, the heart).
+  RT.art = function (p, cls, extraStyle, extra) {
     var inner = p.image
       ? '<img src="' + RT.esc(p.image) + '" alt="' + RT.esc(p.title) + '" data-emoji="' + RT.esc(p.emoji) + '" loading="lazy" referrerpolicy="no-referrer">'
       : '<span aria-hidden="true">' + p.emoji + "</span>";
-    return '<div class="art ' + (cls || "") + '" style="--h:' + p.hue + ";" + (extraStyle || "") + '">' + inner + "</div>";
+    return '<div class="art ' + (cls || "") + '" style="--h:' + p.hue + ";" + (extraStyle || "") + '">' + inner + (extra || "") + "</div>";
   };
 
   // If a picture fails to load (dead link), fall back to the emoji tile.
@@ -73,6 +84,22 @@
   RT.cta = function (p, label, cls) {
     return '<a class="cta ' + (cls || "") + '" href="' + RT.esc(RT.url(p)) + '" target="_blank" rel="' + RT.rel + '">' +
       RT.esc(label || "See on Amazon") + "</a>";
+  };
+
+  // One product tile for the masonry design (used on the home page and the sessions page).
+  // .tile is the fixed hover area; .card inside it is what pops up (see style.css).
+  RT.tile = function (p, ratio) {
+    var badge = p.badge ? '<span class="tag">' + RT.esc(p.badge) + "</span>" : "";
+    var heart = RT.heart ? RT.heart(p) : "";
+    var tags = RT.tagsOf(p).map(function (t) {
+      return '<button type="button" class="hash" data-tag="' + RT.esc(t) + '" aria-label="Show finds tagged ' + RT.esc(t) + '">#' + RT.esc(t) + "</button>";
+    }).join("");
+    return '<article class="tile" data-id="' + RT.esc(p.id) + '"><div class="card">' +
+      RT.art(p, "", "--r:" + (ratio || "1/1"), badge + heart) +
+      '<div class="body"><h3>' + RT.esc(p.title) + "</h3><p>" + RT.esc(p.blurb) + "</p>" +
+      RT.cta(p, "See on Amazon") +
+      (tags ? '<div class="hashes">' + tags + "</div>" : "") +
+      "</div></div></article>";
   };
 
   // Ads: fixed reserved size (no layout shift), clearly labelled, no popups or overlays.
@@ -111,7 +138,8 @@
 
   RT.fillChrome = function () {
     document.title = (S.name || "") + " | " + (S.tagline || "");
-    var map = { "[data-site-name]": S.name, "[data-site-tag]": S.tagline, "[data-disclosure]": S.disclosure };
+    var map = { "[data-site-name]": S.name, "[data-site-tag]": S.tagline, "[data-disclosure]": S.disclosure,
+      "[data-lists-name]": S.listsName || "Therapy Sessions", "[data-lists-tagline]": S.listsTagline };
     Object.keys(map).forEach(function (sel) {
       Array.prototype.forEach.call(document.querySelectorAll(sel), function (n) { n.textContent = map[sel]; });
     });

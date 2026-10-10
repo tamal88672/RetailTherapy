@@ -30,9 +30,13 @@
     <div class="bar-in">
       <a class="logo" href="#"><img class="logo-mark" src="/favicon.svg" alt="" width="30" height="30"><span data-site-name></span></a>
       <input id="q" type="search" placeholder="Search finds…" aria-label="Search">
+      <button type="button" class="saved" id="saved" data-saved-btn aria-pressed="false" aria-label="Saved items" title="Your saved finds">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21.2l-1.5-1.3C5.3 15.3 2 12.3 2 8.6 2 5.6 4.4 3.2 7.4 3.2c1.7 0 3.4.8 4.6 2.1 1.2-1.3 2.9-2.1 4.6-2.1 3 0 5.4 2.4 5.4 5.4 0 3.7-3.3 6.7-8.5 11.3L12 21.2z"/></svg>
+        <span class="n" data-saved-count hidden>0</span>
+      </button>
       <div class="theme" data-theme-toggle role="group" aria-label="Color theme"></div>
     </div>
-    <div class="chips" id="chips" role="tablist" aria-label="Categories"></div>
+    <div class="chips" id="chips" role="group" aria-label="Categories"></div>
     <p class="disc" data-disclosure></p>
   </header>
 
@@ -53,7 +57,10 @@
         <p class="keys">Bookmark it now: press <b>Ctrl + D</b> (<b>⌘ + D</b> on Mac).</p>
       </details>
     </aside>
-    <section id="grid" class="grid" aria-live="polite"></section>
+    <div class="feed">
+      <div id="note" class="note" aria-live="polite"></div>
+      <section id="grid" class="grid" data-source="home" aria-live="polite"></section>
+    </div>
     <aside class="rail">
       <div class="rail-ad"><div class="ad-slot tall" data-ad="sidebar"></div></div>
     </aside>
@@ -68,6 +75,7 @@
 
   <script src="../shared/theme.js"></script>
   <script src="../shared/app.js"></script>
+  <script src="../shared/wish.js"></script>
   <script src="view.js"></script>
   <script>
     // The "why bookmark" box is always open on wide screens and starts collapsed on small ones.

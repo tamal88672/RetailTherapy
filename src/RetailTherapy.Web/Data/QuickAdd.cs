@@ -146,6 +146,10 @@ public static class QuickAdd
         var image = F("image");
         var score = Popularity(title + " " + string.Join(" ", features));
 
+        // Labels: sent by hand ("tags" field) or worked out from the text.
+        var tags = Tagger.Parse(F("tags"));
+        if (tags.Length == 0) tags = Tagger.Derive(title, features, category);
+
         error = null;
         return new Product
         {
@@ -160,6 +164,7 @@ public static class QuickAdd
             Pros = features.Skip(1).ToArray(),
             Order = OrderFor(score),
             Active = true,
+            Tags = tags,
         };
     }
 }

@@ -23,17 +23,21 @@ public sealed class Product
     [FirestoreProperty] public bool Active { get; set; } = true;
     /// <summary>Day the product was posted (yyyy-MM-dd). The newest day is shown in the "New" tab.</summary>
     [FirestoreProperty] public string? AddedOn { get; set; }
+    /// <summary>Short lowercase labels shown under the product (e.g. "gift idea"). Empty = worked out from the text.</summary>
+    [FirestoreProperty] public string[] Tags { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>What the public API returns. The affiliate URL is built on the server.</summary>
 public sealed record ProductDto(
     string Id, string Title, string Category, string Emoji, int Hue,
-    string? Image, string Blurb, string[] Pros, string? Badge, string Url, string? AddedOn)
+    string? Image, string Blurb, string[] Pros, string? Badge, string Url, string? AddedOn, string[] Tags)
 {
     public static ProductDto From(Product p, string amazonTag) => new(
         p.Id, p.Title, p.Category, p.Emoji, p.Hue,
         NullIfEmpty(p.Image), p.Blurb, p.Pros ?? Array.Empty<string>(), NullIfEmpty(p.Badge),
-        AffiliateLinks.Build(p, amazonTag), NullIfEmpty(p.AddedOn));
+        AffiliateLinks.Build(p, amazonTag), NullIfEmpty(p.AddedOn),
+        // Products saved before tags existed get theirs worked out from the text, so every tile shows some.
+        p.Tags is { Length: > 0 } ? p.Tags : RetailTherapy.Web.Data.Tagger.Derive(p));
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 }

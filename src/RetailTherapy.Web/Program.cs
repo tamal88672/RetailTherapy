@@ -14,6 +14,8 @@ builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection("Site")
 builder.Services.AddMemoryCache();
 builder.Services.AddResponseCompression();
 builder.Services.AddSingleton<ProductCatalog>();
+builder.Services.AddSingleton<ListCatalog>();
+builder.Services.AddSingleton<TrackingGuard>();
 // Used to open Amazon short links once (without following them into Amazon) to read the store ID they carry.
 builder.Services.AddHttpClient("amazon").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
@@ -24,13 +26,16 @@ if (string.Equals(builder.Configuration["Storage:Provider"], "Firestore", String
 }
 else
 {
-    var file = Path.Combine(builder.Environment.ContentRootPath, "App_Data", "products.json");
-    builder.Services.AddSingleton<IProductStore>(_ => new JsonFileProductStore(file));
+    var data = Path.Combine(builder.Environment.ContentRootPath, "App_Data");
+    builder.Services.AddSingleton<IProductStore>(_ => new JsonFileProductStore(Path.Combine(data, "products.json")));
+    builder.Services.AddSingleton<IDocStore<CuratedList>>(_ => new JsonDocStore<CuratedList>(Path.Combine(data, "lists.json")));
+    builder.Services.AddSingleton<IDocStore<Wishlist>>(_ => new JsonDocStore<Wishlist>(Path.Combine(data, "wishlists.json")));
+    builder.Services.AddSingleton<IEventStore>(_ => new JsonLinesEventStore(Path.Combine(data, "events.jsonl")));
 }
 
 var app = builder.Build();
 
-// First run: load the starter products if the store is empty.
+// First run: load the starter products and lists if their stores are empty.
 if (app.Configuration.GetValue("Storage:SeedOnStart", true))
 {
     try
@@ -45,7 +50,22 @@ if (app.Configuration.GetValue("Storage:SeedOnStart", true))
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "Seeding failed; continuing without it.");
+        app.Logger.LogError(ex, "Seeding products failed; continuing without it.");
+    }
+
+    try
+    {
+        var listsPath = Path.Combine(app.Environment.ContentRootPath, "Seed", "lists.json");
+        if (File.Exists(listsPath))
+        {
+            await using var fs = File.OpenRead(listsPath);
+            var seed = await JsonSerializer.DeserializeAsync<List<CuratedList>>(fs, JsonDefaults.Web) ?? new List<CuratedList>();
+            await app.Services.GetRequiredService<IDocStore<CuratedList>>().SeedIfEmptyAsync(seed, CancellationToken.None);
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Seeding lists failed; continuing without it.");
     }
 }
 
@@ -76,6 +96,8 @@ app.MapGet("/api/site", (HttpContext ctx, IOptions<SiteOptions> o) =>
         s.Tagline,
         s.Disclosure,
         s.ContactEmail,
+        s.ListsName,
+        s.ListsTagline,
         Ads = new { s.Ads.Enabled, s.Ads.Client, Slots = new { Sidebar = s.Ads.SlotSidebar, Inline = s.Ads.SlotInline } }
     });
 });
@@ -87,6 +109,80 @@ app.MapGet("/api/products", async (HttpContext ctx, ProductCatalog catalog, Canc
     ctx.Response.Headers.ETag = snap.ETag;
     if (ctx.Request.Headers.IfNoneMatch == snap.ETag) return Results.StatusCode(StatusCodes.Status304NotModified);
     return Results.Ok(snap.Items);
+});
+
+app.MapGet("/api/lists", async (HttpContext ctx, ListCatalog lists, CancellationToken ct) =>
+{
+    var snap = await lists.GetSnapshotAsync(ct);
+    ctx.Response.Headers.CacheControl = "public,max-age=60";
+    ctx.Response.Headers.ETag = snap.ETag;
+    if (ctx.Request.Headers.IfNoneMatch == snap.ETag) return Results.StatusCode(StatusCodes.Status304NotModified);
+    return Results.Ok(snap.Items);
+});
+
+// The curated-lists page (called "Therapy Sessions" on the site; the name is Site:ListsName). It lives in the live design's folder.
+app.MapGet("/sessions", (HttpContext ctx) =>
+{
+    var file = liveFiles.GetFileInfo("sessions.html");
+    if (!file.Exists) return Results.NotFound();
+    ctx.Response.Headers.CacheControl = "public,max-age=300";
+    return Results.File(file.CreateReadStream(), "text/html; charset=utf-8");
+});
+
+// ---- Tracking: which products people save and click. Anonymous (a random id kept in the visitor's browser). ----
+app.MapPost("/api/track", async (TrackBatch? batch, ProductCatalog catalog, IEventStore events, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (batch is null || batch.Events is null || batch.Events.Count == 0 || !TrackingGuard.ValidVisitor(batch.VisitorId))
+        return Results.BadRequest(new { error = "visitorId and events are required" });
+
+    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
+    var now = DateTime.UtcNow;
+    var list = batch.Events.Take(20)
+        .Where(e => e is not null && TrackingGuard.EventTypes.Contains(e.Type) && known.Contains(e.ProductId))
+        .Select(e => new TrackEvent
+        {
+            Type = e.Type,
+            ProductId = e.ProductId,
+            VisitorId = batch.VisitorId,
+            Source = TrackingGuard.CleanSource(e.Source),
+            Day = now.ToString("yyyy-MM-dd"),
+            At = now.ToString("o"),
+        }).ToList();
+    if (list.Count == 0) return Results.NoContent();
+    if (!guard.Allow(batch.VisitorId, list.Count)) return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+
+    try { await events.AppendAsync(list, ct); }
+    catch (Exception ex) { log.LogError(ex, "Could not record events"); } // tracking must never break the page
+    return Results.NoContent();
+});
+
+// A visitor's saved items, kept on the server too (the browser copy is the one the page uses).
+// This is the hook for accounts later: the same list is then claimed by a user and can be shared.
+app.MapPut("/api/wishlist", async (WishlistPut? body, ProductCatalog catalog, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (body is null || !TrackingGuard.ValidVisitor(body.VisitorId)) return Results.BadRequest(new { error = "visitorId is required" });
+    if (!guard.Allow(body.VisitorId, 1)) return Results.StatusCode(StatusCodes.Status429TooManyRequests);
+
+    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
+    var ids = (body.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(200).ToArray();
+    var now = DateTime.UtcNow.ToString("o");
+    try
+    {
+        var id = "v-" + body.VisitorId;
+        var w = await store.GetAsync(id, ct) ?? new Wishlist { Id = id, OwnerType = "visitor", OwnerId = body.VisitorId, CreatedOn = now };
+        w.ProductIds = ids;
+        w.UpdatedOn = now;
+        await store.UpsertAsync(w, ct);
+    }
+    catch (Exception ex) { log.LogError(ex, "Could not save wishlist"); }
+    return Results.NoContent();
+});
+
+app.MapGet("/api/wishlist/{visitorId}", async (string visitorId, IDocStore<Wishlist> store, CancellationToken ct) =>
+{
+    if (!TrackingGuard.ValidVisitor(visitorId)) return Results.BadRequest(new { error = "bad visitor id" });
+    var w = await store.GetAsync("v-" + visitorId, ct);
+    return w is null ? Results.NotFound() : Results.Ok(new { w.Name, w.ProductIds, w.UpdatedOn });
 });
 
 app.MapGet("/robots.txt", () => Results.Text(
@@ -118,6 +214,8 @@ admin.MapPut("/products/{id}", async (string id, Product p, ProductCatalog catal
     if (string.IsNullOrWhiteSpace(p.Asin) && string.IsNullOrWhiteSpace(p.Url))
         return Results.BadRequest(new { error = "provide asin or url" });
     p.Id = id;
+    p.Tags = Tagger.Clean(p.Tags);
+    if (p.Tags.Length == 0) p.Tags = Tagger.Derive(p);
     if (!string.IsNullOrWhiteSpace(p.Url))
     {
         var checkedLink = await LinkGuard.EnsureAsync(p.Url!, site.AmazonTag, http.CreateClient("amazon"), ct);
@@ -157,10 +255,11 @@ admin.MapPost("/quick-add", async (HttpContext ctx, ProductCatalog catalog, IHtt
         p.Emoji = existing.Emoji;
         p.Hue = existing.Hue;
         p.Order = existing.Order;
+        if (string.IsNullOrWhiteSpace(form["tags"]) && existing.Tags is { Length: > 0 }) p.Tags = existing.Tags;
     }
     p.AddedOn = string.IsNullOrWhiteSpace(existing?.AddedOn) ? DateTime.UtcNow.ToString("yyyy-MM-dd") : existing!.AddedOn;
     await catalog.UpsertAsync(p, ct);
-    return Results.Ok(new { p.Id, p.Category, p.Order, p.AddedOn, created = existing is null, url = AffiliateLinks.Build(p, site.AmazonTag), linkCheck = link.State.ToString() });
+    return Results.Ok(new { p.Id, p.Category, p.Tags, p.Order, p.AddedOn, created = existing is null, url = AffiliateLinks.Build(p, site.AmazonTag), linkCheck = link.State.ToString() });
 });
 
 // Used by the "link intake" automation: turns a SiteStripe / short link (or a bare product id) into the
@@ -222,6 +321,86 @@ admin.MapGet("/audit-links", async (bool? fix, ProductCatalog catalog, IHttpClie
         notAmazon = results.Count(x => x.r.State == LinkState.NotAmazon),
         applied = fix == true,
         changed
+    });
+});
+
+// Saves tags on every product that has none (or on all of them with ?force=true), so they can be edited later.
+// Products without saved tags already show worked-out ones, so this is optional.
+admin.MapPost("/retag", async (bool? force, ProductCatalog catalog, CancellationToken ct) =>
+{
+    var all = await catalog.ListAllAsync(ct);
+    var changed = 0;
+    foreach (var p in all)
+    {
+        if (force != true && p.Tags is { Length: > 0 }) continue;
+        p.Tags = Tagger.Derive(p);
+        await catalog.UpsertAsync(p, ct);
+        changed++;
+    }
+    return Results.Ok(new { total = all.Count, changed, forced = force == true });
+});
+
+// ---- Curated lists ("Therapy Sessions") ----
+admin.MapGet("/lists", async (ListCatalog lists, CancellationToken ct) => Results.Ok(await lists.ListAllAsync(ct)));
+
+admin.MapPut("/lists/{id}", async (string id, CuratedList l, ListCatalog lists, CancellationToken ct) =>
+{
+    if (!idPattern.IsMatch(id)) return Results.BadRequest(new { error = "id: lowercase letters, digits and dashes only" });
+    if (string.IsNullOrWhiteSpace(l.Title)) return Results.BadRequest(new { error = "title is required" });
+    l.Id = id;
+    l.Tags = Tagger.Clean(l.Tags);
+    l.ProductIds = (l.ProductIds ?? Array.Empty<string>()).Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToArray();
+    l.Categories = (l.Categories ?? Array.Empty<string>()).Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToArray();
+    if (l.Limit <= 0) l.Limit = 12;
+    await lists.UpsertAsync(l, ct);
+    return Results.Ok(l);
+});
+
+admin.MapDelete("/lists/{id}", async (string id, ListCatalog lists, CancellationToken ct) =>
+    await lists.DeleteAsync(id, ct) ? Results.NoContent() : Results.NotFound());
+
+// ---- Report: what people save and click. ?days=30 (default) and ?limit=5000 (most events read; each one is a database read). ----
+admin.MapGet("/stats", async (int? days, int? limit, ProductCatalog catalog, IEventStore events, IDocStore<Wishlist> wishlists, CancellationToken ct) =>
+{
+    var span = Math.Clamp(days ?? 30, 1, 365);
+    var max = Math.Clamp(limit ?? 5000, 100, 50000);
+    var since = DateTime.UtcNow.AddDays(-(span - 1)).ToString("yyyy-MM-dd");
+    var log = await events.ListSinceAsync(since, max, ct);
+    var lists = await wishlists.ListAsync(ct);
+    var titles = (await catalog.ListAllAsync(ct)).ToDictionary(p => p.Id, p => p.Title);
+
+    object Top(IEnumerable<IGrouping<string, string>> groups, string label) => groups
+        .OrderByDescending(g => g.Count()).Take(15)
+        .Select(g => new Dictionary<string, object> { ["id"] = g.Key, ["title"] = titles.GetValueOrDefault(g.Key, g.Key), [label] = g.Count() }).ToList();
+
+    return Results.Ok(new
+    {
+        days = span,
+        since,
+        eventsCounted = log.Count,
+        mayBeIncomplete = log.Count >= max,
+        totals = new
+        {
+            saves = log.Count(e => e.Type == "wish_add"),
+            removals = log.Count(e => e.Type == "wish_remove"),
+            clicks = log.Count(e => e.Type == "click"),
+            visitors = log.Select(e => e.VisitorId).Distinct().Count(),
+        },
+        savedNow = new
+        {
+            wishlists = lists.Count(w => w.ProductIds.Length > 0),
+            items = lists.Sum(w => w.ProductIds.Length),
+        },
+        topSavedNow = Top(lists.SelectMany(w => w.ProductIds.Select(id => (w, id))).GroupBy(x => x.id, x => x.id), "saved"),
+        topSavesInPeriod = Top(log.Where(e => e.Type == "wish_add").GroupBy(e => e.ProductId, e => e.ProductId), "saves"),
+        topClicksInPeriod = Top(log.Where(e => e.Type == "click").GroupBy(e => e.ProductId, e => e.ProductId), "clicks"),
+        perDay = log.GroupBy(e => e.Day).OrderBy(g => g.Key).Select(g => new
+        {
+            day = g.Key,
+            saves = g.Count(e => e.Type == "wish_add"),
+            removals = g.Count(e => e.Type == "wish_remove"),
+            clicks = g.Count(e => e.Type == "click"),
+        }),
     });
 });
 
