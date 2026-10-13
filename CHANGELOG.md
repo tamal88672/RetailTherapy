@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
-## [1.8.0] - 2026-10-10 (code pushed, waiting to be deployed with 1.5.0, 1.6.0 and 1.7.0)
+## [1.8.0] - 2026-10-10 (deployed 2026-10-12, Cloud Run revision retail-therapy-00012)
 
 ### Added
 - **Sign-in with Google or an email link.** No password, no phone/SMS, no Apple (those cost money or need a paid developer account). Firebase allows only 5 email-link emails a day on its free no-billing plan, so the project must be on the Blaze plan (the README explains; it still costs about $0). A "Sign in" button sits in the top bar (home and Sessions pages). It stays hidden until `Auth__ProjectId` and `Auth__ApiKey` are set, so the site works exactly as before until you finish the Firebase setup in the README.
@@ -29,7 +29,7 @@ Changes made outside the code (Make.com automations, product data) are listed at
 - "No sign-up, no email" wording replaced: signing in is optional.
 - Provisions for 1.9 (several lists, sharing, public profiles) and 1.10 (recommendations) are in place: the account list is a normal `wishlists` document with `ownerType: user`.
 
-## [1.7.0] - 2026-10-10 (code pushed, waiting to be deployed with 1.5.0 and 1.6.0)
+## [1.7.0] - 2026-10-10 (deployed 2026-10-12, Cloud Run revision retail-therapy-00012)
 
 ### Added
 - **Ranked tags.** Every tag now has a relevance score (0 to 100) for each product. The site scores them with a TF-IDF method: a word in the title counts more than one in a feature line, and a tag found on few products counts more than one found on almost all of them. Product types (serum, air fryer, tumbler...) are tags too, so a tag leads to genuinely similar products.
@@ -46,7 +46,7 @@ Changes made outside the code (Make.com automations, product data) are listed at
 ### Removed
 - `POST /api/admin/retag`: tags are ranked automatically every time the catalog refreshes.
 
-## [1.6.0] - 2026-10-09 (code pushed, waiting to be deployed with 1.5.0)
+## [1.6.0] - 2026-10-09 (deployed 2026-10-12, Cloud Run revision retail-therapy-00012)
 
 ### Added
 - **Therapy Sessions page** at `/sessions`: curated lists, each a themed shelf of products (title, blurb, emoji, product tiles). The name is a setting (`Site__ListsName`), so renaming it never touches the code. Eight starter lists: Glow-Up Session, Cozy Night In, Gift Shelf, Going Viral, Page-Turner Club, Kitchen Wins, Summer Ready, Pack & Go. A list can pin products by hand and/or pull in every product that matches a category or tag.
@@ -65,7 +65,7 @@ Changes made outside the code (Make.com automations, product data) are listed at
 - Products now carry a `tags` field. Older products without it keep working.
 - Night sparkles on pictures moved to the bottom-right corner to make room for the heart.
 
-## [1.5.0] - 2026-10-09 (code pushed, waiting to be deployed)
+## [1.5.0] - 2026-10-09 (deployed 2026-10-12, Cloud Run revision retail-therapy-00012)
 
 ### Added
 - **Pop-out tiles.** The tile under the mouse lifts and grows. Moving into the small gaps between tiles puts every tile back down. Touch screens get a quick press effect instead.
