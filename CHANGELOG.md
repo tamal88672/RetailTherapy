@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
-## [1.8.1] - 2026-10-14 (not deployed yet)
+## [1.8.1] - 2026-10-14 (deployed 2026-10-14, Cloud Run revision retail-therapy-00013)
 
 ### Changed
 - **Tactile buttons.** The main buttons (See on Amazon, sign-in, account button, selected filter chip) now have a lit top edge, a darker bottom edge, a small contact shadow and a soft colored glow, and sink 1px when pressed. Coral in Day, pink-violet in Night. Other chips, the saved heart, the account button and the Day / Auto / Night switch (now a sunken track with a raised knob) get a lighter version. Product tiles only get a softer layered shadow, and the tag pills stay flat, so the pictures stay the focus. Press movement is off for people who prefer reduced motion.
