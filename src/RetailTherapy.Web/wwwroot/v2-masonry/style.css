@@ -338,3 +338,86 @@ html { scroll-behavior: smooth; }
 .acct-err[hidden] { display: none; }
 .acct-fine { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .acct-fine a { color: inherit; }
+
+/* ---------- Tactile buttons (1.8.1 try-out) ----------
+   Layered shadows: a lit top edge, a shaded bottom edge, a tiny contact shadow and a soft colored glow underneath.
+   Pressing moves the control down 1px and sinks the shadow. Colors come from the site (coral by day, pink-violet by night).
+   Strong effect: the main buttons and the selected chip. Light effect: the other chips and small controls.
+   Product tiles and their tag pills only get a soft shadow, so the pictures stay the focus.
+   Everything for this look is in this one block: delete it to go back to the flat style. */
+:root {
+  --tx-sheen: linear-gradient(180deg, rgba(255,255,255,.2), rgba(255,255,255,0) 55%, rgba(90,0,25,.08));
+  --tx-main: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(120,15,40,.28), 0 1px 2px rgba(120,15,40,.45), 0 8px 20px -6px rgba(232,69,90,.55);
+  --tx-main-hover: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(120,15,40,.28), 0 1px 2px rgba(120,15,40,.45), 0 10px 24px -6px rgba(232,69,90,.7);
+  --tx-main-down: inset 0 2px 4px rgba(120,15,40,.4);
+  --tx-on: inset 0 1px 0 rgba(255,255,255,.22), inset 0 -2px 0 rgba(0,0,0,.45), 0 1px 2px rgba(0,0,0,.4), 0 4px 9px -4px rgba(35,31,32,.5);
+  --tx-on-down: inset 0 2px 4px rgba(0,0,0,.5);
+  --tx-seg-sheen: linear-gradient(180deg, #fff, #fcf1ee);
+  --tx-seg: inset 0 1px 0 #fff, inset 0 -2px 0 rgba(120,70,60,.14), 0 1px 3px rgba(35,31,32,.22);
+  --tx-soft-sheen: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 60%);
+  --tx-soft: inset 0 1px 0 rgba(255,255,255,.85), inset 0 -2px 0 rgba(120,70,60,.12), 0 1px 2px rgba(60,30,30,.16);
+  --tx-soft-down: inset 0 2px 4px rgba(60,30,30,.22);
+  --tx-track: inset 0 1px 3px rgba(60,30,30,.2);
+  --tx-card: 0 1px 2px rgba(60,30,30,.08), 0 8px 20px -10px rgba(60,30,30,.22);
+  --tx-pop: 0 2px 4px rgba(60,30,30,.12), 0 18px 34px -10px rgba(60,30,30,.38);
+  --tx-heart: inset 0 1px 0 #fff, inset 0 -2px 0 rgba(60,30,30,.12), 0 2px 8px rgba(35,31,32,.22);
+}
+:root[data-theme="dark"] {
+  --tx-sheen: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 52%, rgba(40,0,70,.18));
+  --tx-main: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(50,0,90,.5), 0 1px 2px rgba(0,0,0,.6), 0 8px 24px -6px rgba(255,63,164,.6);
+  --tx-main-hover: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -2px 0 rgba(50,0,90,.5), 0 1px 2px rgba(0,0,0,.6), 0 0 22px rgba(255,79,216,.55), 0 10px 26px -6px rgba(255,63,164,.7);
+  --tx-main-down: inset 0 2px 5px rgba(40,0,70,.6), 0 0 10px rgba(255,63,164,.35);
+  --tx-on: inset 0 1px 0 rgba(255,255,255,.4), inset 0 -2px 0 rgba(50,0,90,.5), 0 1px 2px rgba(0,0,0,.6), 0 4px 10px -3px rgba(255,63,164,.6);
+  --tx-on-down: var(--tx-main-down);
+  --tx-seg-sheen: var(--tx-sheen);
+  --tx-seg: var(--tx-main);
+  --tx-soft-sheen: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0) 60%);
+  --tx-soft: inset 0 1px 0 rgba(255,255,255,.1), inset 0 -2px 0 rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.55);
+  --tx-soft-down: inset 0 2px 4px rgba(0,0,0,.55);
+  --tx-track: inset 0 1px 4px rgba(0,0,0,.55);
+  --tx-card: 0 1px 2px rgba(0,0,0,.45), 0 8px 22px -10px rgba(0,0,0,.55), 0 0 14px rgba(255,79,216,.08);
+  --tx-pop: var(--pop);
+}
+
+/* main buttons: filled with the site color */
+.cta, .acct-primary, .acct-av { background: var(--tx-sheen), var(--cta-bg); box-shadow: var(--tx-main); }
+.cta { transition: filter .2s, box-shadow .2s, translate .08s; }
+.cta:hover, .acct-primary:hover:not(:disabled), .acct-av:hover { box-shadow: var(--tx-main-hover); }
+.cta:active, .acct-primary:active:not(:disabled), .acct-av:active { translate: 0 1px; box-shadow: var(--tx-main-down); filter: none; }
+.acct-primary, .acct-av { transition: box-shadow .15s, translate .08s, filter .15s; }
+
+/* selected filter chip and small pills */
+.chip.on, .pill { background: var(--tx-sheen), var(--chip-on-bg); box-shadow: var(--tx-on); }
+.chip.on:active, .pill:active { translate: 0 1px; box-shadow: var(--tx-on-down); }
+
+/* secondary buttons: a gentle raised look on the soft field color */
+.chip:not(.on):not(.chip-link), .saved:not([aria-pressed="true"]), .acct-btn:not(.acct-av) { background: var(--tx-soft-sheen), var(--field); box-shadow: var(--tx-soft); }
+.chip:not(.on):not(.chip-link):active, .saved:not([aria-pressed="true"]):active, .acct-btn:not(.acct-av):active { translate: 0 1px; box-shadow: var(--tx-soft-down); }
+:root[data-theme="dark"] .chip:hover:not(.on):not(.chip-link) { box-shadow: var(--tx-soft), 0 0 12px rgba(255,79,216,.45); }
+.chip, .saved, .acct-btn, .pill { transition: box-shadow .15s, translate .08s, color .15s, background-color .15s; }
+.acct-google { box-shadow: var(--tx-soft); transition: box-shadow .15s, translate .08s, color .15s, border-color .15s; }
+.acct-google:active { translate: 0 1px; box-shadow: var(--tx-soft-down); }
+.acct-danger { background: var(--tx-sheen), #d33b3b; box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 0 rgba(90,0,0,.3), 0 1px 2px rgba(90,0,0,.4), 0 8px 18px -6px rgba(211,59,59,.55); }
+.acct-danger:active { translate: 0 1px; box-shadow: inset 0 2px 4px rgba(90,0,0,.45); }
+
+/* Day / Auto / Night switch: a sunken track with a raised knob */
+.theme { box-shadow: var(--tx-track); }
+.theme button[aria-pressed="true"], .saved[aria-pressed="true"] { background: var(--tx-seg-sheen), var(--seg-on-bg); box-shadow: var(--tx-seg); }
+.theme button:active { translate: 0 1px; }
+
+/* the heart on a product picture */
+.heart { box-shadow: var(--tx-heart); }
+.heart:active { translate: 0 1px; }
+:root[data-theme="dark"] .heart { box-shadow: inset 0 1px 0 rgba(255,255,255,.14), inset 0 -2px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(255,79,216,.35), 0 0 12px rgba(255,79,216,.25); }
+:root[data-theme="dark"] .heart:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(255,79,216,.8), 0 0 16px rgba(255,79,216,.6); }
+:root[data-theme="dark"] .heart[aria-pressed="true"] { box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -2px 0 rgba(0,0,0,.35), 0 0 0 1px rgba(255,79,216,.9), 0 0 18px rgba(255,79,216,.75); }
+
+/* product tiles: just a softer layered shadow (hover lift is unchanged) */
+.card { box-shadow: var(--tx-card); }
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover .card, .tile:focus-within .card { box-shadow: var(--tx-pop); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cta, .acct-primary, .acct-av, .chip, .saved, .acct-btn, .pill, .acct-google { transition: none; }
+}
