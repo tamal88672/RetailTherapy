@@ -14,7 +14,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
-## [1.9.0] - 2026-10-14 (not deployed yet)
+## [1.9.0] - 2026-10-15 (deployed 2026-10-15, Cloud Run revision retail-therapy-00014-f5d)
 
 ### Added
 - **Lists.** Signed-in people can make up to 10 named lists and put saved finds into them from a **Lists** button under each find. The Saved page gets tabs (Saved, then each list) and a "+ New list" button. Unsaving a find takes it out of all lists.
