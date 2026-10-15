@@ -68,6 +68,7 @@
   var lastToken = "";        // so a closing tab can still send its last change
   var touches = 0;           // counts changes made on this page, to spot edits made while a request was in flight
   var syncTimer = null;
+  var linked = false;        // true once the account's list has been merged in (or the attempt has ended)
 
   function authed(method, url, body) {
     return acct.token().then(function (t) {
@@ -151,14 +152,16 @@
           if (!same) changed();
           if (touches !== before) syncSoon();
         })
-        .catch(function () { /* offline or not ready: keep the browser copy, try again next visit */ });
+        .catch(function () { /* offline or not ready: keep the browser copy, try again next visit */ })
+        .then(function () { linked = true; });
     },
+    attached: function () { return !!acct && linked; },
     // Signed out: send any last change, then leave this browser clean (the list lives in the account now).
     detach: function () {
       var done = Promise.resolve();
       if (acct && syncTimer) { clearTimeout(syncTimer); done = pushNow(); }
       return done.then(function () {
-        acct = null; ids = []; writeIds(); lastToken = "";
+        acct = null; linked = false; ids = []; writeIds(); lastToken = "";
         try { localStorage.removeItem(OWNER); } catch (e) {}
         changed();
       });

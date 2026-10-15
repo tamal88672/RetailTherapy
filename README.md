@@ -49,7 +49,8 @@ First request after idle is a cold start (about a second). Set `--min-instances 
 | `Site__ListsName`, `Site__ListsTagline` | what the curated-lists page is called ("Therapy Sessions") and its subtitle |
 | `Auth__ProjectId`, `Auth__ApiKey`, `Auth__AppId` | Firebase web settings. **Sign-in stays off until `ProjectId` and `ApiKey` are set.** Public values, not secrets. See "Sign-in" below |
 | `Auth__AuthDomain` | defaults to `{ProjectId}.firebaseapp.com` |
-| `Auth__BlockedNames` | extra words usernames may not contain, comma separated |
+| `Auth__BlockedNames` | extra words usernames and list names may not contain, comma separated |
+| `Auth__AdminEmails` | emails (comma separated) that are admins of the site. They must be the verified email of a Google or email-link sign-in. See "Lists, sharing and the admin page" below |
 | `Admin__ApiKey` | key for the admin API (a Secret Manager secret in deploy.sh) |
 
 ## Manage products (no redeploy)
@@ -99,11 +100,30 @@ Optional. **Google** and **email link** only (no password, no phone/SMS, no Appl
 
 **Important: the email-link limit.** Firebase caps email-link sign-in emails at **5 per day on the Spark (no-billing) plan and 25,000 per day on the Blaze (pay-as-you-go) plan** (https://firebase.google.com/docs/auth/limits). Your Google Cloud project already has billing linked for Cloud Run, so Firebase should show it as Blaze: check **Firebase console, bottom left, plan name** and upgrade there if it says Spark. Blaze still has free monthly allowances, so this site stays at about $0. Set a budget alert in Google Cloud (Billing, Budgets) for peace of mind. Google sign-in sends no email, so it is not affected by the limit.
 
-**What it does.** A "Sign in" button appears in the top bar. After signing in, the person picks a **username once** (3 to 20 characters, letters, numbers and `_`; never changeable; unique; reserved and offensive words refused). The saved list (heart) now belongs to the account and follows them to every device. Anything saved before signing in joins the account's list. Signing out leaves that browser clean; "Delete account" removes the lists and the sign-in (the username stays reserved).
+**What it does.** A "Sign in" button appears in the top bar. After signing in, the person picks a **username once** (3 to 20 characters, letters, numbers and `_`; never changeable; unique; reserved and offensive words refused). The saved list (heart) now belongs to the account and follows them to every device. Anything saved before signing in joins the account's list. Signing out leaves that browser clean; "Delete account" removes the saved finds, lists, notes and the sign-in (the username stays reserved). What signed-in people get on top of that is under "Lists, sharing and the admin page".
 
 **What the site stores.** Firebase keeps the email. This site keeps only: a random account id, the username, and the saved list. Collections: `users` (one per person), `usernames` (one document per claimed name; the document id is the name, so two people can never get the same one: the claim is a single database transaction), `wishlists` (account lists have id `u-{accountId}`; the anonymous list a person had before is kept for the report and marked `claimedBy`).
 
-**How it is checked.** The browser sends Firebase's sign-in token as `Authorization: Bearer ...`. The server checks the signature against Google's published keys (cached, no extra package), the project, the issuer and the expiry (`Data/FirebaseTokenVerifier.cs`). Endpoints: `GET /api/me`, `GET /api/me/username/available?name=`, `POST /api/me/username`, `GET|PUT /api/me/wishlist`, `POST /api/me/claim`, `DELETE /api/me`. Each person is limited to 120 calls per 10 minutes.
+**How it is checked.** The browser sends Firebase's sign-in token as `Authorization: Bearer ...`. The server checks the signature against Google's published keys (cached, no extra package), the project, the issuer and the expiry (`Data/FirebaseTokenVerifier.cs`). Endpoints: `GET /api/me`, `GET /api/me/username/available?name=`, `POST /api/me/username`, `GET|PUT /api/me/wishlist`, `POST /api/me/claim`, `DELETE /api/me`. Each person is limited to 300 calls per 10 minutes.
+
+## Lists, sharing and the admin page (1.9)
+**For signed-in people** (open the heart button, "Saved"):
+- **Lists.** Up to 10 named lists (names up to 40 characters, no duplicates, offensive words refused). A find is added to a list from the **Lists** button under it; a find can be in several lists. Unsaving a find (the heart) takes it out of every list and drops its note.
+- **Notes and "bought".** A private note (up to 280 characters) and a "bought" tick on each saved find. "Hide bought" removes ticked finds from view. Notes and ticks are never shared and never leave the account.
+- **Sharing.** Each list is **private** (default), **anyone with the link** (`/u/{username}/{code}`, a random 12-character code) or **public** (also listed on the profile page `/u/{username}`). Sharing needs a username and an account that is not suspended. The pages are `noindex` and are also blocked for crawlers; the shared data comes from `GET /api/u/{username}` and `GET /api/u/{username}/{code}` (`Cache-Control: no-store`), which return nothing for private lists, unknown names, suspended or deleted accounts.
+- API (all need the sign-in token): `GET /api/me/saved`, `PATCH /api/me/saved/{productId}` (`note`, `bought`), `POST /api/me/lists`, `PATCH|DELETE /api/me/lists/{id}`, `PUT|DELETE /api/me/lists/{id}/items/{productId}`. Changes to one person's lists are done one at a time on the server (a lock per person). The data is in the person's `wishlists` document (`u-{accountId}`): `productIds` is the "Saved" list, `lists` the named lists, `details` the notes and ticks. If you run several Cloud Run instances at once, two changes to the same person made at the very same moment on two instances can overwrite each other; at this size that does not happen in practice.
+
+**The admin page** is `/admin` (not linked from the site; the account menu shows "Admin" to admins). It shows how many people registered, new and active in the last 7 days, how many chose a username, admins, suspended accounts, saved finds and lists (and how many are shared), and a searchable table of people: username, sign-in method, joined, last seen, saved, lists. From the table an admin can:
+- **change a role** (Member or Admin),
+- **suspend / unsuspend**: a suspended person's shared lists and profile are hidden and they cannot share, but they can still sign in and use their own lists,
+- **delete** (two clicks): removes their saved finds, lists, notes and profile; their username stays reserved. Their Google or email sign-in lives in Firebase (Authentication, Users), so remove it there too if you want to stop someone returning. Admins cannot delete or change themselves, and an admin has to be made a Member before being deleted.
+
+It never shows emails (the site does not store them), only the username (if chosen) and a short account id.
+
+**Who is an admin.** Either the stored role is "admin", or the person's **verified** sign-in email is listed in `Auth__AdminEmails` (this is how the first admin starts; such a person is recorded as an admin the first time they sign in). To demote someone named in `Auth__AdminEmails`, remove the email from the setting. The admin page also opens with the existing `Admin__ApiKey` (typed in, kept for that browser tab only), which is useful before any account is an admin. The API behind it: `GET /api/admin/users?limit=`, `PUT /api/admin/users/{id}/role` (`{"role":"member|admin"}`), `PUT /api/admin/users/{id}/status` (`{"status":"active|suspended"}`), `DELETE /api/admin/users/{id}`; accepted with the `X-Admin-Key` header or an admin's sign-in token. Role, status and delete are logged with the admin's id.
+```
+gcloud run services update retail-therapy --region us-central1 --update-env-vars "Auth__AdminEmails=you@gmail.com"
+```
 
 **One-time setup (about 10 minutes, no cost):**
 1. Open https://console.firebase.google.com, **Add project**, and choose your existing Google Cloud project (`project-dff667a3-f08e-426c-ac7`). Say no to Google Analytics. (Adding Firebase to the project does not change Cloud Run or Firestore.)

@@ -18,6 +18,8 @@
 
   var cfg = null, lib = null, auth = null, user = null, me = null;
   var dlg = null, menuOpen = false, wasIn = false, justSignedIn = false, view = "", authReady = false;
+  var subs = [];             // pages (the lists, the admin page) ask to hear when someone signs in or out
+  function emit() { subs.forEach(function (fn) { try { fn(); } catch (e) {} }); }
 
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function put(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
@@ -61,13 +63,14 @@
       wasIn = true;
       put(HINT, u.uid);
       render();
-      RT.wish.attach(u.uid, token);
+      RT.wish.attach(u.uid, token).then(emit);
       loadMe();
     } else {
-      if (wasIn) RT.wish.detach();      // signed out: the list lives in the account, leave this browser clean
+      var gone = wasIn ? RT.wish.detach() : Promise.resolve();   // signed out: the list lives in the account, leave this browser clean
       wasIn = false; me = null;
       put(HINT, null); put(NAMEKEY, null);
       render();
+      gone.then(emit);
     }
   }
 
@@ -77,12 +80,13 @@
       me = r.data;
       put(NAMEKEY, me.username || "");
       render();
+      emit();
       if (justSignedIn) {
         justSignedIn = false;
         if (!me.username) openDialog("username"); else closeDialog();
       }
     }).catch(function () {
-      me = null; render();
+      me = null; render(); emit();
       if (justSignedIn) { justSignedIn = false; closeDialog(); }
     });
   }
@@ -116,7 +120,10 @@
       ? '<div class="acct-who">@' + esc(me.username) + "</div>"
       : me ? '<button type="button" role="menuitem" data-acct="pick">Choose a username</button>'
            : '<div class="acct-who muted">Account unavailable right now</div>';
-    return '<div class="acct-menu" role="menu">' + head +
+    var links = '<a role="menuitem" href="/#saved" data-acct="nav">My lists</a>' +
+      (me && me.username ? '<a role="menuitem" href="/u/' + esc(me.username) + '" data-acct="nav">My profile</a>' : "") +
+      (me && me.role === "admin" ? '<a role="menuitem" href="/admin" data-acct="nav">Admin</a>' : "");
+    return '<div class="acct-menu" role="menu">' + head + links +
       '<button type="button" role="menuitem" data-acct="signout">Sign out</button>' +
       '<button type="button" role="menuitem" class="danger" data-acct="delete">Delete account…</button></div>';
   }
@@ -124,7 +131,7 @@
   function setMenu(open) {
     menuOpen = open;
     render();
-    if (open) { var f = slot.querySelector(".acct-menu button"); if (f) f.focus(); }
+    if (open) { var f = slot.querySelector(".acct-menu [role=menuitem]"); if (f) f.focus(); }
   }
 
   // ---------- dialogs ----------
@@ -156,7 +163,7 @@
   function closeDialog() { if (dlg && dlg.open) dlg.close(); view = ""; }
 
   var X = '<button type="button" class="acct-x" data-acct="close" aria-label="Close">&times;</button>';
-  var FINE = '<p class="acct-fine">Your email stays with Google\'s sign-in service. This site keeps only a username and your saved lists. <a href="/legal.html">Privacy</a></p>';
+  var FINE = '<p class="acct-fine">Your email stays with Google\'s sign-in service. This site keeps only a username, your saved lists and notes. <a href="/legal.html">Privacy</a></p>';
   var ERR = '<p class="acct-err" role="alert" hidden></p>';
 
   function body(name, arg) {
@@ -186,7 +193,7 @@
         '<button type="button" class="acct-link" data-acct="close">Not now</button></form>' + ERR;
     }
     if (name === "delete") {
-      return X + '<h2 id="acct-h">Delete your account?</h2><p class="acct-sub">This removes your saved lists and signs you out everywhere. <b>This can\'t be undone</b>, and your username stays reserved so nobody else can use it.</p>' +
+      return X + '<h2 id="acct-h">Delete your account?</h2><p class="acct-sub">This removes your saved finds, lists and notes, and signs you out everywhere. <b>This can\'t be undone</b>, and your username stays reserved so nobody else can use it.</p>' +
         '<button type="button" class="acct-danger" data-acct="delete-yes">Yes, delete my account</button>' +
         '<button type="button" class="acct-link" data-acct="close">Cancel</button>' + ERR;
     }
@@ -376,6 +383,7 @@
       }
       return setMenu(!menuOpen);
     }
+    if (a === "nav") { setTimeout(setMenuClosed, 0); return; }
     if (a === "pick") return openDialog("username");
     if (a === "signout") return signOut();
     if (a === "delete") { setMenuClosed(); return openDialog("delete"); }
@@ -404,7 +412,16 @@
 
   RT.account = {
     open: function () { if (cfg && cfg.enabled) openDialog("signin"); },
+    pick: function () { if (user) openDialog("username"); },
     signedIn: function () { return !!user; },
-    username: function () { return me && me.username || null; }
+    username: function () { return me && me.username || null; },
+    role: function () { return me && me.role || "member"; },
+    status: function () { return me && me.status || "active"; },
+    enabled: function () { return !!(cfg && cfg.enabled); },
+    // false while a returning visitor's session is still being restored
+    ready: function () { return authReady || !get(HINT) || !(cfg && cfg.enabled); },
+    uid: function () { return user ? user.uid : null; },
+    api: api,
+    onChange: function (fn) { subs.push(fn); }
   };
 })();

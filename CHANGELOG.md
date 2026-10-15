@@ -14,6 +14,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 Every deploy gets an entry here before it goes out. Group the lines under **Added**, **Changed**, **Fixed** or **Removed**.
 Changes made outside the code (Make.com automations, product data) are listed at the bottom, with dates.
 
+## [1.9.0] - 2026-10-14 (not deployed yet)
+
+### Added
+- **Lists.** Signed-in people can make up to 10 named lists and put saved finds into them from a **Lists** button under each find. The Saved page gets tabs (Saved, then each list) and a "+ New list" button. Unsaving a find takes it out of all lists.
+- **Notes and "bought".** A private note (280 characters) and a "bought" tick on every saved find, with a "Hide bought" switch. Never shared.
+- **Sharing.** Each list is private (default), anyone-with-the-link, or public. Shared lists open at `/u/{username}/{code}` and a profile page at `/u/{username}` shows a person's public lists. Anyone can look without signing in and can heart finds to save them to their own list. Only lists the owner shared are ever sent; notes, ticks and private lists never are. Sharing needs a username. The pages are `noindex`.
+- **Admin page** at `/admin`: number of registered users (plus new and active in 7 days, usernames chosen, admins, suspended, saved finds, lists), a searchable table, and per person: change role (Member or Admin), suspend or unsuspend, delete (two clicks). Opens with an admin account or the existing admin key. The first admin comes from the new setting `Auth__AdminEmails`. No emails are shown (none are stored).
+- API: `GET /api/me/saved`, `PATCH /api/me/saved/{productId}`, `POST /api/me/lists`, `PATCH|DELETE /api/me/lists/{id}`, `PUT|DELETE /api/me/lists/{id}/items/{productId}`, `GET /api/u/{username}`, `GET /api/u/{username}/{code}`, and `GET /api/admin/users`, `PUT /api/admin/users/{id}/role`, `PUT /api/admin/users/{id}/status`, `DELETE /api/admin/users/{id}`. `GET /api/me` also returns `role` and `status`.
+- Account menu: My lists, My profile, and Admin (admins only).
+
+### Changed
+- Each account's limit is now 300 calls per 10 minutes (was 120), since lists and notes make more small calls.
+- Privacy text (`legal.html`) and README ("Lists, sharing and the admin page") describe lists, sharing, profiles and what admins can see. Account deletion now also removes lists and notes.
+- The Saved page no longer says "sign-in is coming soon"; people who are not signed in are invited to sign in.
+- `/robots.txt` also blocks `/admin`.
+- **Neon text in Night mode.** The logo, page headings (Therapy Sessions, profile), the "Your shortcut before you shop" heading and the big admin number are now neon signs: a white "tube" with pink glow layers (4, 12, 28 and 60 px; smaller on small text) and a flicker (two quick dips to 40% about every 4 seconds, staggered so signs don't blink together). Small neon text ("Shared by", outlined chips such as Therapy Sessions) keeps a steady glow. Day mode is unchanged and the flicker is off for people who prefer reduced motion. It is one block at the end of `v2-masonry/style.css` ("Neon text"); delete it to go back to the pink-to-violet gradient text.
+
+### Not in this version
+- Following tags, "For you" and the weekly email (1.10). Admins cannot remove someone's Google or email login from the site itself (that is done in Firebase); suspend is the tool for abuse.
+
 ## [1.8.1] - 2026-10-14 (deployed 2026-10-14, Cloud Run revision retail-therapy-00013)
 
 ### Changed

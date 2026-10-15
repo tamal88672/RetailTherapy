@@ -129,6 +129,7 @@
       RT.art(p, "", "--r:" + (ratio || "1/1"), badge + heart) +
       '<div class="body"><h3>' + RT.esc(p.title) + "</h3><p>" + RT.esc(p.blurb) + "</p>" +
       RT.cta(p, "See on Amazon") +
+      (RT.tileExtra ? RT.tileExtra(p) : "") +
       (tags ? '<div class="hashes">' + tags + "</div>" : "") +
       "</div></div></article>";
   };

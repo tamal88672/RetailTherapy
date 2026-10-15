@@ -43,6 +43,18 @@ public sealed class AuthOptions
     public string CertsUrl { get; set; } = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com";
     /// <summary>Extra words usernames may not contain, comma separated (added to the built-in list).</summary>
     public string BlockedNames { get; set; } = "";
+    /// <summary>
+    /// Emails that are always admins (comma separated), so the first admin does not need the database. Only a sign-in whose
+    /// email is verified counts. Everyone else is promoted or demoted on the /admin page.
+    /// </summary>
+    public string AdminEmails { get; set; } = "";
+
+    public bool IsAdminEmail(string? email, bool verified)
+    {
+        if (!verified || string.IsNullOrWhiteSpace(email)) return false;
+        return AdminEmails.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(a => string.Equals(a, email.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
 
     public bool Enabled => !string.IsNullOrWhiteSpace(ProjectId) && !string.IsNullOrWhiteSpace(ApiKey);
     public string Domain => string.IsNullOrWhiteSpace(AuthDomain) ? ProjectId + ".firebaseapp.com" : AuthDomain;

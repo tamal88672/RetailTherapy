@@ -55,7 +55,7 @@ public sealed class TrackingGuard
     }
 
     /// <summary>Limits the account endpoints: a signed-in person may make this many calls in ten minutes.</summary>
-    public bool AllowAccount(string uid, int perTenMinutes = 120)
+    public bool AllowAccount(string uid, int perTenMinutes = 300)
     {
         var key = "acct:" + uid;
         lock (_lock)

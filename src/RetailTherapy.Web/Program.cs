@@ -18,6 +18,7 @@ builder.Services.AddSingleton<ProductCatalog>();
 builder.Services.AddSingleton<ListCatalog>();
 builder.Services.AddSingleton<TrackingGuard>();
 builder.Services.AddSingleton<FirebaseTokenVerifier>();
+builder.Services.AddSingleton<SavedService>();
 // Used to open Amazon short links once (without following them into Amazon) to read the store ID they carry.
 builder.Services.AddHttpClient("amazon").ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 
@@ -211,14 +212,45 @@ static async Task<SessionUser?> SignedIn(HttpContext ctx, FirebaseTokenVerifier 
 static IResult Deny(HttpContext ctx) =>
     ctx.Items.ContainsKey("limited") ? Results.StatusCode(StatusCodes.Status429TooManyRequests) : Results.Unauthorized();
 
-static object MeBody(UserProfile u) => new { username = u.Username, provider = u.Provider, createdOn = u.CreatedOn };
+static object MeBody(UserProfile u, bool isAdmin) =>
+    new { username = u.Username, provider = u.Provider, createdOn = u.CreatedOn, role = isAdmin ? "admin" : "member", status = u.Status };
 
-app.MapGet("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+// An admin is anyone whose account says so, or whose verified email is listed in Auth__AdminEmails (that is how the first admin starts).
+static bool IsAdmin(UserProfile u, SessionUser me, AuthOptions opt) =>
+    u.Role == "admin" || opt.IsAdminEmail(me.Email, me.EmailVerified);
+
+// The person's profile (made the first time they are seen). An admin named in Auth__AdminEmails is recorded as an admin
+// right away, so the admin page counts them and shows their role. (To remove one, take the email out of the setting.)
+static async Task<UserProfile> ProfileOf(IUserStore users, SessionUser me, AuthOptions opt, CancellationToken ct)
+{
+    var u = await users.EnsureAsync(me.Uid, me.Provider, ct);
+    if (u.Role != "admin" && opt.IsAdminEmail(me.Email, me.EmailVerified) && await users.SetRoleAsync(me.Uid, "admin", ct)) u.Role = "admin";
+    return u;
+}
+
+static async Task<HashSet<string>> KnownIds(ProductCatalog catalog, CancellationToken ct) =>
+    (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
+
+// Runs a request body; any storage failure becomes a plain 503 (and a log line) instead of a crash page.
+static async Task<IResult> Safe(Func<Task<IResult>> run, ILogger log, string what)
+{
+    try { return await run(); }
+    catch (Exception ex) when (ex is not OperationCanceledException) { log.LogError(ex, "{What}", what); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+}
+
+// The result of a change to saved items: the new state, or the reason it was refused.
+static IResult Reply(EditResult r, string? createdId = null) =>
+    r.Ok ? Results.Ok(SavedOps.Payload(r.Doc, createdId)) : Results.Json(new { error = r.Error }, statusCode: r.Status);
+
+app.MapGet("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IOptions<AuthOptions> opt, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
 {
     var me = await SignedIn(ctx, auth, guard, ct);
     if (me is null) return Deny(ctx);
-    try { return Results.Ok(MeBody(await users.EnsureAsync(me.Uid, me.Provider, ct))); }
-    catch (Exception ex) { log.LogError(ex, "Could not load account"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+    return await Safe(async () =>
+    {
+        var u = await ProfileOf(users, me, opt.Value, ct);
+        return Results.Ok(MeBody(u, IsAdmin(u, me, opt.Value)));
+    }, log, "Could not load account");
 });
 
 app.MapGet("/api/me/username/available", async (string? name, HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IOptions<AuthOptions> opt, TrackingGuard guard, CancellationToken ct) =>
@@ -240,7 +272,7 @@ app.MapPost("/api/me/username", async (UsernameBody? body, HttpContext ctx, Fire
     var lower = Usernames.Normalize(body?.Name);
     var problem = Usernames.Validate(lower, opt.Value.BlockedNames);
     if (problem is not null) return Results.BadRequest(new { error = problem });
-    try
+    return await Safe(async () =>
     {
         await users.EnsureAsync(me.Uid, me.Provider, ct);
         return await users.ClaimUsernameAsync(me.Uid, lower, ct) switch
@@ -250,55 +282,45 @@ app.MapPost("/api/me/username", async (UsernameBody? body, HttpContext ctx, Fire
             ClaimResult.AlreadyHasUsername => Results.Conflict(new { error = "You already have a username, and it cannot be changed." }),
             _ => Results.Unauthorized(),
         };
-    }
-    catch (Exception ex) { log.LogError(ex, "Could not claim username"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+    }, log, "Could not claim username");
 });
 
-app.MapGet("/api/me/wishlist", async (HttpContext ctx, FirebaseTokenVerifier auth, IDocStore<Wishlist> store, TrackingGuard guard, CancellationToken ct) =>
+// ---- The signed-in person's saved items: the "Saved" list (what the hearts sync) plus named lists, notes and "bought" ----
+app.MapGet("/api/me/wishlist", async (HttpContext ctx, FirebaseTokenVerifier auth, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
 {
     var me = await SignedIn(ctx, auth, guard, ct);
     if (me is null) return Deny(ctx);
-    var w = await store.GetAsync("u-" + me.Uid, ct);
-    return Results.Ok(new { productIds = w?.ProductIds ?? Array.Empty<string>(), updatedOn = w?.UpdatedOn });
-});
-
-app.MapPut("/api/me/wishlist", async (WishBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
-{
-    var me = await SignedIn(ctx, auth, guard, ct);
-    if (me is null) return Deny(ctx);
-    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
-    var ids = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(200).ToArray();
-    try
+    return await Safe(async () =>
     {
-        var now = DateTime.UtcNow.ToString("o");
-        var id = "u-" + me.Uid;
-        var w = await store.GetAsync(id, ct) ?? new Wishlist { Id = id, OwnerType = "user", OwnerId = me.Uid, CreatedOn = now };
-        w.ProductIds = ids;
-        w.UpdatedOn = now;
-        await store.UpsertAsync(w, ct);
-        return Results.Ok(new { productIds = ids, updatedOn = now });
-    }
-    catch (Exception ex) { log.LogError(ex, "Could not save account wishlist"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        var w = await saved.GetAsync(me.Uid, ct);
+        return Results.Ok(new { productIds = w.ProductIds, updatedOn = w.UpdatedOn });
+    }, log, "Could not read account wishlist");
+});
+
+app.MapPut("/api/me/wishlist", async (WishBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var known = await KnownIds(catalog, ct);
+        var ids = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(SavedOps.MaxItems).ToArray();
+        var r = await saved.EditAsync(me.Uid, known, w => SavedOps.SetSaved(w, ids), ct);
+        return Results.Ok(new { productIds = r.Doc.ProductIds, updatedOn = r.Doc.UpdatedOn });
+    }, log, "Could not save account wishlist");
 });
 
 // On first sign-in the saved items from this browser join the account's list (nothing is lost, nothing is duplicated).
-app.MapPost("/api/me/claim", async (ClaimBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+app.MapPost("/api/me/claim", async (ClaimBody? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
 {
     var me = await SignedIn(ctx, auth, guard, ct);
     if (me is null) return Deny(ctx);
-    var known = (await catalog.GetSnapshotAsync(ct)).Items.Select(p => p.Id).ToHashSet();
-    var local = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(200).ToArray();
-    try
+    return await Safe(async () =>
     {
-        var now = DateTime.UtcNow.ToString("o");
-        var id = "u-" + me.Uid;
-        var w = await store.GetAsync(id, ct) ?? new Wishlist { Id = id, OwnerType = "user", OwnerId = me.Uid, CreatedOn = now };
+        var known = await KnownIds(catalog, ct);
+        var local = (body?.ProductIds ?? Array.Empty<string>()).Where(known.Contains).Distinct().Take(SavedOps.MaxItems).ToArray();
         // The account's items first, then this browser's new ones; the cap keeps the newest.
-        var merged = w.ProductIds.Where(known.Contains).Concat(local).Distinct().ToArray();
-        if (merged.Length > 200) merged = merged[^200..];
-        w.ProductIds = merged;
-        w.UpdatedOn = now;
-        await store.UpsertAsync(w, ct);
+        var r = await saved.EditAsync(me.Uid, known, w => SavedOps.MergeSaved(w, local, known), ct);
 
         if (TrackingGuard.ValidVisitor(body?.VisitorId))
         {
@@ -309,28 +331,166 @@ app.MapPost("/api/me/claim", async (ClaimBody? body, HttpContext ctx, FirebaseTo
                 await store.UpsertAsync(v, ct);
             }
         }
-        return Results.Ok(new { productIds = merged, updatedOn = now });
-    }
-    catch (Exception ex) { log.LogError(ex, "Could not claim visitor list"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        return Results.Ok(new { productIds = r.Doc.ProductIds, updatedOn = r.Doc.UpdatedOn });
+    }, log, "Could not claim visitor list");
+});
+
+// Everything the Saved page needs: the list, notes, bought ticks and the person's own named lists.
+app.MapGet("/api/me/saved", async (HttpContext ctx, FirebaseTokenVerifier auth, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () => Results.Ok(SavedOps.Payload(await saved.GetAsync(me.Uid, ct))), log, "Could not read saved items");
+});
+
+// A private note and/or the "bought" tick on one saved find. Only fields that are sent change; an empty note clears it.
+app.MapPatch("/api/me/saved/{productId}", async (string productId, ItemPatch? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var known = await KnownIds(catalog, ct);
+        return Reply(await saved.EditAsync(me.Uid, known, w => SavedOps.PatchItem(w, productId, body), ct));
+    }, log, "Could not save note");
+});
+
+app.MapPost("/api/me/lists", async (NewList? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, IOptions<AuthOptions> opt, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var known = await KnownIds(catalog, ct);
+        var now = DateTime.UtcNow.ToString("o");
+        SavedList? made = null;
+        var r = await saved.EditAsync(me.Uid, known, w =>
+        {
+            var (s, e, l) = SavedOps.CreateList(w, body?.Name, body?.ProductId, known, opt.Value.BlockedNames, now);
+            made = l;
+            return (s, e);
+        }, ct);
+        return Reply(r, made?.Id);
+    }, log, "Could not create list");
+});
+
+// Rename a list and/or change who can see it: "private", "unlisted" (anyone with the link) or "public" (also on the profile page).
+app.MapPatch("/api/me/lists/{listId}", async (string listId, ListPatch? body, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, IUserStore users, IOptions<AuthOptions> opt, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var profile = await users.EnsureAsync(me.Uid, me.Provider, ct);
+        var why = SavedOps.CannotShare(profile);
+        var known = await KnownIds(catalog, ct);
+        var now = DateTime.UtcNow.ToString("o");
+        return Reply(await saved.EditAsync(me.Uid, known, w => SavedOps.PatchList(w, listId, body, why is null, why ?? "", opt.Value.BlockedNames, now), ct));
+    }, log, "Could not change list");
+});
+
+app.MapDelete("/api/me/lists/{listId}", async (string listId, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () => Reply(await saved.EditAsync(me.Uid, await KnownIds(catalog, ct), w => SavedOps.DeleteList(w, listId), ct)), log, "Could not delete list");
+});
+
+app.MapPut("/api/me/lists/{listId}/items/{productId}", async (string listId, string productId, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var known = await KnownIds(catalog, ct);
+        var now = DateTime.UtcNow.ToString("o");
+        return Reply(await saved.EditAsync(me.Uid, known, w => SavedOps.AddToList(w, listId, productId, known, now), ct));
+    }, log, "Could not add to list");
+});
+
+app.MapDelete("/api/me/lists/{listId}/items/{productId}", async (string listId, string productId, HttpContext ctx, FirebaseTokenVerifier auth, ProductCatalog catalog, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+{
+    var me = await SignedIn(ctx, auth, guard, ct);
+    if (me is null) return Deny(ctx);
+    return await Safe(async () =>
+    {
+        var now = DateTime.UtcNow.ToString("o");
+        return Reply(await saved.EditAsync(me.Uid, await KnownIds(catalog, ct), w => SavedOps.RemoveFromList(w, listId, productId, now), ct));
+    }, log, "Could not remove from list");
 });
 
 // Delete my account data. (The browser removes the sign-in itself first; the token stays valid for up to an hour.)
 // The username stays reserved so nobody can pose as the old account.
-app.MapDelete("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, IDocStore<Wishlist> store, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
+app.MapDelete("/api/me", async (HttpContext ctx, FirebaseTokenVerifier auth, IUserStore users, SavedService saved, TrackingGuard guard, ILogger<Program> log, CancellationToken ct) =>
 {
     var me = await SignedIn(ctx, auth, guard, ct);
     if (me is null) return Deny(ctx);
-    try
+    return await Safe(async () =>
     {
-        await store.DeleteAsync("u-" + me.Uid, ct);
+        await saved.DeleteAsync(me.Uid, ct);
         await users.DeleteAsync(me.Uid, ct);
         return Results.NoContent();
-    }
-    catch (Exception ex) { log.LogError(ex, "Could not delete account"); return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+    }, log, "Could not delete account");
 });
 
+// ---- Shared lists and profiles (no sign-in needed to look). Only lists the owner made "unlisted" or "public" are ever shown,
+// and nothing is shown for a suspended or deleted account. Notes and "bought" ticks are never included. ----
+static async Task<(string Username, UserProfile Profile, Wishlist Saved)?> PublicOwner(string? name, IUserStore users, SavedService saved, CancellationToken ct)
+{
+    var lower = Usernames.Normalize(name);
+    if (!Usernames.LooksValid(lower)) return null;
+    var uid = await users.UidForUsernameAsync(lower, ct);
+    if (uid is null) return null;
+    var profile = await users.GetAsync(uid, ct);
+    if (profile is null || profile.Status == "suspended") return null;
+    return (lower, profile, await saved.GetAsync(uid, ct));
+}
+
+app.MapGet("/api/u/{username}", async (string username, HttpContext ctx, IUserStore users, SavedService saved, ILogger<Program> log, CancellationToken ct) =>
+{
+    ctx.Response.Headers.CacheControl = "no-store";
+    return await Safe(async () =>
+    {
+        var owner = await PublicOwner(username, users, saved, ct);
+        if (owner is null) return Results.NotFound();
+        var (name, profile, w) = owner.Value;
+        return Results.Ok(new
+        {
+            username = name,
+            since = profile.CreatedOn,
+            lists = w.Lists.Where(l => l.Visibility == "public" && l.ProductIds.Length > 0)
+                .Select(l => new { id = l.Id, name = l.Name, productIds = l.ProductIds }),
+        });
+    }, log, "Could not load profile");
+});
+
+app.MapGet("/api/u/{username}/{listId}", async (string username, string listId, HttpContext ctx, IUserStore users, SavedService saved, ILogger<Program> log, CancellationToken ct) =>
+{
+    ctx.Response.Headers.CacheControl = "no-store";
+    return await Safe(async () =>
+    {
+        var owner = await PublicOwner(username, users, saved, ct);
+        var list = owner?.Saved.Lists.FirstOrDefault(l => l.Id == listId.ToLowerInvariant() && SavedOps.IsShared(l));
+        if (owner is null || list is null) return Results.NotFound();
+        return Results.Ok(new { username = owner.Value.Username, list = new { id = list.Id, name = list.Name, productIds = list.ProductIds, updatedOn = list.UpdatedOn } });
+    }, log, "Could not load shared list");
+});
+
+// The pages for them (the page reads its address and asks the API above). Not for search engines: these are other people's lists.
+IResult ServePage(HttpContext ctx, string file)
+{
+    var f = liveFiles.GetFileInfo(file);
+    if (!f.Exists) return Results.NotFound();
+    ctx.Response.Headers.CacheControl = "public,max-age=300";
+    ctx.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
+    return Results.File(f.CreateReadStream(), "text/html; charset=utf-8");
+}
+app.MapGet("/u/{username}", (HttpContext ctx) => ServePage(ctx, "profile.html"));
+app.MapGet("/u/{username}/{listId}", (HttpContext ctx) => ServePage(ctx, "profile.html"));
+app.MapGet("/admin", (HttpContext ctx) => ServePage(ctx, "admin.html"));
+
 app.MapGet("/robots.txt", () => Results.Text(
-    "User-agent: *\nDisallow: /api/\nDisallow: /preview/\nDisallow: /v1-magazine/\nDisallow: /v2-masonry/\nDisallow: /v3-compact/\n",
+    "User-agent: *\nDisallow: /api/\nDisallow: /admin\nDisallow: /preview/\nDisallow: /v1-magazine/\nDisallow: /v2-masonry/\nDisallow: /v3-compact/\n",
     "text/plain"));
 
 // ---- Admin API (manage products without redeploying). Needs header X-Admin-Key. ----
@@ -533,5 +693,120 @@ admin.MapGet("/stats", async (int? days, int? limit, ProductCatalog catalog, IEv
 
 admin.MapDelete("/products/{id}", async (string id, ProductCatalog catalog, CancellationToken ct) =>
     await catalog.DeleteAsync(id, ct) ? Results.NoContent() : Results.NotFound());
+
+// ---- Admin: accounts. Same X-Admin-Key as above, or sign in as an admin (Account menu, Admin). Used by the /admin page. ----
+var adminUsers = app.MapGroup("/api/admin/users");
+adminUsers.AddEndpointFilter(async (ctx, next) =>
+{
+    var http = ctx.HttpContext;
+    http.Response.Headers.CacheControl = "no-store";
+    var given = http.Request.Headers["X-Admin-Key"].ToString();
+    if (given.Length > 0)
+    {
+        var keyOk = adminKey.Length > 0 &&
+                    CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(given), Encoding.UTF8.GetBytes(adminKey));
+        if (!keyOk) return Results.Unauthorized();
+        http.Items["actor"] = "key";
+        return await next(ctx);
+    }
+    var sp = http.RequestServices;
+    var me = await SignedIn(http, sp.GetRequiredService<FirebaseTokenVerifier>(), sp.GetRequiredService<TrackingGuard>(), http.RequestAborted);
+    if (me is null) return Deny(http);
+    var authOpt = sp.GetRequiredService<IOptions<AuthOptions>>().Value;
+    var profile = await ProfileOf(sp.GetRequiredService<IUserStore>(), me, authOpt, http.RequestAborted);
+    if (!IsAdmin(profile, me, authOpt))
+        return Results.Json(new { error = "Admins only." }, statusCode: StatusCodes.Status403Forbidden);
+    http.Items["actor"] = me.Uid;
+    return await next(ctx);
+});
+
+static bool ValidUid(string? uid) => uid is not null && Regex.IsMatch(uid, "^[A-Za-z0-9_-]{1,128}$");
+static string Actor(HttpContext ctx) => ctx.Items["actor"] as string ?? "";
+
+// The numbers and the people. Saved counts come from the wishlists collection (one read of it per page load).
+adminUsers.MapGet("", async (int? limit, HttpContext ctx, IUserStore users, IDocStore<Wishlist> wishlists, ILogger<Program> log, CancellationToken ct) =>
+    await Safe(async () =>
+    {
+        var cap = Math.Clamp(limit ?? 1000, 1, 5000);
+        var all = await users.ListAsync(cap + 1, ct);
+        var capped = all.Count > cap;
+        var list = all.Take(cap).ToList();
+        var byOwner = (await wishlists.ListAsync(ct)).Where(w => w.OwnerType == "user")
+            .GroupBy(w => w.OwnerId).ToDictionary(g => g.Key, g => g.First());
+        var weekAgo = DateTime.UtcNow.AddDays(-6).ToString("yyyy-MM-dd");
+        var me = Actor(ctx);
+
+        var rows = list.Select(u =>
+        {
+            byOwner.TryGetValue(u.Id, out var w);
+            return new
+            {
+                id = u.Id, username = u.Username, provider = u.Provider, role = u.Role, status = u.Status,
+                createdOn = u.CreatedOn, lastSeenOn = u.LastSeenOn,
+                saved = w?.ProductIds.Length ?? 0, lists = w?.Lists.Count ?? 0, shared = w?.Lists.Count(SavedOps.IsShared) ?? 0,
+                isMe = me == u.Id,
+            };
+        }).ToList();
+        return Results.Ok(new
+        {
+            summary = new
+            {
+                total = rows.Count, capped,
+                admins = rows.Count(r => r.role == "admin"),
+                suspended = rows.Count(r => r.status == "suspended"),
+                withUsername = rows.Count(r => !string.IsNullOrEmpty(r.username)),
+                newLast7Days = rows.Count(r => string.CompareOrdinal(r.createdOn ?? "", weekAgo) >= 0),
+                activeLast7Days = rows.Count(r => string.CompareOrdinal(r.lastSeenOn ?? "", weekAgo) >= 0),
+                lists = rows.Sum(r => r.lists),
+                sharedLists = rows.Sum(r => r.shared),
+                savedItems = rows.Sum(r => r.saved),
+            },
+            users = rows,
+        });
+    }, log, "Could not list users"));
+
+adminUsers.MapPut("/{uid}/role", async (string uid, RoleBody? body, HttpContext ctx, IUserStore users, ILogger<Program> log, CancellationToken ct) =>
+{
+    var role = (body?.Role ?? "").Trim().ToLowerInvariant();
+    if (!ValidUid(uid) || role is not ("member" or "admin")) return Results.BadRequest(new { error = "role must be member or admin" });
+    if (Actor(ctx) == uid) return Results.Json(new { error = "You can't change your own role." }, statusCode: StatusCodes.Status409Conflict);
+    return await Safe(async () =>
+    {
+        if (!await users.SetRoleAsync(uid, role, ct)) return Results.NotFound();
+        log.LogInformation("Admin {Actor} set the role of {Uid} to {Role}", Actor(ctx), uid, role);
+        return Results.Ok(new { id = uid, role });
+    }, log, "Could not change role");
+});
+
+adminUsers.MapPut("/{uid}/status", async (string uid, StatusBody? body, HttpContext ctx, IUserStore users, ILogger<Program> log, CancellationToken ct) =>
+{
+    var status = (body?.Status ?? "").Trim().ToLowerInvariant();
+    if (!ValidUid(uid) || status is not ("active" or "suspended")) return Results.BadRequest(new { error = "status must be active or suspended" });
+    if (Actor(ctx) == uid) return Results.Json(new { error = "You can't suspend yourself." }, statusCode: StatusCodes.Status409Conflict);
+    return await Safe(async () =>
+    {
+        if (!await users.SetStatusAsync(uid, status, ct)) return Results.NotFound();
+        log.LogInformation("Admin {Actor} set the status of {Uid} to {Status}", Actor(ctx), uid, status);
+        return Results.Ok(new { id = uid, status });
+    }, log, "Could not change status");
+});
+
+// Removes the person's lists and profile (their username stays reserved). Their Google / email sign-in itself lives in Firebase:
+// to stop someone coming back, suspend them, or delete the user in the Firebase console too.
+adminUsers.MapDelete("/{uid}", async (string uid, HttpContext ctx, IUserStore users, SavedService saved, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (!ValidUid(uid)) return Results.BadRequest(new { error = "bad id" });
+    if (Actor(ctx) == uid) return Results.Json(new { error = "Use Delete account in your own account menu." }, statusCode: StatusCodes.Status409Conflict);
+    return await Safe(async () =>
+    {
+        var u = await users.GetAsync(uid, ct);
+        if (u is null) return Results.NotFound();
+        if (u.Role == "admin") return Results.Json(new { error = "Make them a member first, then delete." }, statusCode: StatusCodes.Status409Conflict);
+        await saved.DeleteAsync(uid, ct);
+        await users.DeleteAsync(uid, ct);
+        log.LogInformation("Admin {Actor} deleted account {Uid}", Actor(ctx), uid);
+        return Results.NoContent();
+    }, log, "Could not delete account");
+});
 
 app.Run();

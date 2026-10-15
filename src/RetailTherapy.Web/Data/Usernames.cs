@@ -19,6 +19,18 @@ public static class Usernames
     // Obvious abuse. Extend with Auth__BlockedNames (comma separated).
     private static readonly string[] BlockedParts = { "fuck", "shit", "cunt", "nigg", "fagg", "whore", "rapist", "nazi", "hitler" };
 
+    /// <summary>True when free text (a list name, say) contains one of the blocked words, even with spaces or symbols between the letters.</summary>
+    public static bool ContainsBlocked(string text, string? extraBlocked = null)
+    {
+        var flat = new string((text ?? "").ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        var extra = (extraBlocked ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => new string(x.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray()));
+        return BlockedParts.Concat(extra).Any(b => b.Length > 0 && flat.Contains(b));
+    }
+
+    /// <summary>Lowercase usernames only; used to reject odd input before it reaches the database.</summary>
+    public static bool LooksValid(string? lowerName) => lowerName is not null && Shape.IsMatch(lowerName);
+
     public static string Normalize(string? name) => (name ?? "").Trim().ToLowerInvariant();
 
     /// <summary>Null when the (already normalized) name is allowed; otherwise a short reason for the person to read.</summary>

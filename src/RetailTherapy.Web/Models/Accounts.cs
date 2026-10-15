@@ -16,6 +16,10 @@ public sealed class UserProfile : IHasId
     [FirestoreProperty] public string Provider { get; set; } = "";
     [FirestoreProperty] public string? CreatedOn { get; set; }
     [FirestoreProperty] public string? LastSeenOn { get; set; }
+    /// <summary>"member" (default) or "admin". Admins can open /admin to see and manage accounts.</summary>
+    [FirestoreProperty] public string Role { get; set; } = "member";
+    /// <summary>"active" (default) or "suspended". A suspended account keeps its private lists but cannot share, and its shared lists are hidden.</summary>
+    [FirestoreProperty] public string Status { get; set; } = "active";
 }
 
 /// <summary>
@@ -39,3 +43,12 @@ public enum ClaimResult { Ok, Taken, AlreadyHasUsername, NoUser }
 public sealed record UsernameBody(string? Name);
 public sealed record ClaimBody(string? VisitorId, string[]? ProductIds);
 public sealed record WishBody(string[]? ProductIds);
+
+// ---- Lists, notes and sharing (1.9) ----
+public sealed record ItemPatch(string? Note, bool? Bought);
+public sealed record NewList(string? Name, string? ProductId);
+public sealed record ListPatch(string? Name, string? Visibility);
+
+// ---- Admin (1.9) ----
+public sealed record RoleBody(string? Role);
+public sealed record StatusBody(string? Status);

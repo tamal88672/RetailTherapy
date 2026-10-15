@@ -14,6 +14,14 @@ public interface IUserStore
     Task<ClaimResult> ClaimUsernameAsync(string uid, string lowerName, CancellationToken ct);
     /// <summary>Removes the profile. The username stays reserved so nobody can pose as the old account.</summary>
     Task DeleteAsync(string uid, CancellationToken ct);
+    /// <summary>Everyone (up to <paramref name="limit"/>), newest first. For the admin page.</summary>
+    Task<IReadOnlyList<UserProfile>> ListAsync(int limit, CancellationToken ct);
+    /// <summary>"member" or "admin". False when the account does not exist.</summary>
+    Task<bool> SetRoleAsync(string uid, string role, CancellationToken ct);
+    /// <summary>"active" or "suspended". False when the account does not exist.</summary>
+    Task<bool> SetStatusAsync(string uid, string status, CancellationToken ct);
+    /// <summary>The owner of a username, or null when the name is free or its account was deleted.</summary>
+    Task<string?> UidForUsernameAsync(string lowerName, CancellationToken ct);
 }
 
 public sealed class JsonUserStore : IUserStore
@@ -100,6 +108,49 @@ public sealed class JsonUserStore : IUserStore
             }
             d.Users.Remove(u);
             await WriteAsync(d, ct);
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<IReadOnlyList<UserProfile>> ListAsync(int limit, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try { return Newest((await ReadAsync(ct)).Users, limit); }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<bool> SetRoleAsync(string uid, string role, CancellationToken ct) =>
+        await ChangeAsync(uid, u => u.Role = role, ct);
+
+    public async Task<bool> SetStatusAsync(string uid, string status, CancellationToken ct) =>
+        await ChangeAsync(uid, u => u.Status = status, ct);
+
+    public async Task<string?> UidForUsernameAsync(string lowerName, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var uid = (await ReadAsync(ct)).Names.FirstOrDefault(n => n.Id == lowerName)?.Uid;
+            return string.IsNullOrEmpty(uid) || uid == "deleted" ? null : uid;
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>Newest sign-ups first (ties broken by id so the order is stable).</summary>
+    internal static IReadOnlyList<UserProfile> Newest(IEnumerable<UserProfile> users, int limit) =>
+        users.OrderByDescending(u => u.CreatedOn ?? "").ThenBy(u => u.Id, StringComparer.Ordinal).Take(Math.Max(1, limit)).ToList();
+
+    private async Task<bool> ChangeAsync(string uid, Action<UserProfile> change, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            var d = await ReadAsync(ct);
+            var u = d.Users.FirstOrDefault(x => x.Id == uid);
+            if (u is null) return false;
+            change(u);
+            await WriteAsync(d, ct);
+            return true;
         }
         finally { _gate.Release(); }
     }
@@ -194,4 +245,35 @@ public sealed class FirestoreUserStore : IUserStore
             return true;
         }, cancellationToken: ct);
     }
+
+    public async Task<IReadOnlyList<UserProfile>> ListAsync(int limit, CancellationToken ct)
+    {
+        var snap = await _users.OrderByDescending("CreatedOn").Limit(Math.Max(1, limit)).GetSnapshotAsync(ct);
+        return JsonUserStore.Newest(snap.Documents.Select(d => d.ConvertTo<UserProfile>()), limit);
+    }
+
+    public Task<bool> SetRoleAsync(string uid, string role, CancellationToken ct) => ChangeAsync(uid, u => u.Role = role, ct);
+
+    public Task<bool> SetStatusAsync(string uid, string status, CancellationToken ct) => ChangeAsync(uid, u => u.Status = status, ct);
+
+    public async Task<string?> UidForUsernameAsync(string lowerName, CancellationToken ct)
+    {
+        var snap = await _names.Document(lowerName).GetSnapshotAsync(ct);
+        if (!snap.Exists) return null;
+        var uid = snap.ConvertTo<UsernameClaim>().Uid;
+        return string.IsNullOrEmpty(uid) || uid == "deleted" ? null : uid;
+    }
+
+    // Read-change-write inside one transaction, so a role change cannot overwrite a sign-in that happened at the same moment.
+    private Task<bool> ChangeAsync(string uid, Action<UserProfile> change, CancellationToken ct) =>
+        _db.RunTransactionAsync(async tx =>
+        {
+            var userRef = _users.Document(uid);
+            var snap = await tx.GetSnapshotAsync(userRef, ct);
+            if (!snap.Exists) return false;
+            var u = snap.ConvertTo<UserProfile>();
+            change(u);
+            tx.Set(userRef, u);
+            return true;
+        }, cancellationToken: ct);
 }
